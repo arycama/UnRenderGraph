@@ -14,7 +14,7 @@ public class ResizableArray<T>
 	public Span<T> AsSpan(Range range) => items.AsSpan(range);
 	public Span<T> AsSpan() => AsSpan(..Count);
 
-	private void EnsureCapacity(int newCapacity)
+	public void EnsureCapacity(int newCapacity)
 	{
 		if (newCapacity < this.items.Length)
 			return;
@@ -44,5 +44,15 @@ public class ResizableArray<T>
 	public bool Contains(T item)
 	{
 		return Array.IndexOf(items, item, 0, Count) >= 0;
+	}
+
+	public void Sort(Array keys)
+	{
+		Array.Sort(keys, items);
+	}
+
+	public void Sort(ResizableArray<float> keys)
+	{
+		Sort(keys.items);
 	}
 }
