@@ -1,7 +1,7 @@
 {
-    "name": "com.arycama.underndergraph",
-    "description": "Unrender Graph",
+    "name": "com.arycama.unrendergraph",
+    "description": "Un Render Graph",
     "version": "1.0.0",
-    "displayName": "Unrender Graph",
+    "displayName": "Un Render Graph",
     "hideInEditor": false
 }
