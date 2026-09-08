@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 public class ResourceMap
 {
@@ -18,13 +19,21 @@ public class ResourceMap
 	public bool TryGetResource<T>(out T resource)
 	{
 		var resourceExists = TryGetResource(typeof(T), out var temp);
-		resource = (T)temp;
+		resource = resourceExists ? (T)temp : default;
 		return resourceExists;
 	}
 
 	public T GetResource<T>()
 	{
-		return (T)resources[typeof(T)];
+		if (TryGetResource<T>(out var resource))
+		{
+			return resource;
+		}
+		else
+		{
+			Debug.LogError($"Resource of type {typeof(T)} has not been set");
+			return default;
+		}
 	}
 
 	public void Clear()
