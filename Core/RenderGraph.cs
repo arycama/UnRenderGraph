@@ -280,9 +280,13 @@ public class RenderGraph : IDisposable
 				_ => true,
 			};
 
-			// If this is the last pass, it needs to be resolved
-			var requiresResolve = viewInfo.samples > 1 && nativePassDesc.passEndIndex == target.lastWriteIndex && isColor;
-			var requiresMsaaStore = viewInfo.samples > 1 && (nativePassDesc.passEndIndex < target.lastWriteIndex || nativePassDesc.passEndIndex == target.lastWriteIndex) && !isColor;
+			// Resolve color if it's last write is within this pass
+			var requiresResolve = viewInfo.samples > 1 && isColor && target.lastWriteIndex <= nativePassDesc.passEndIndex && target.lastReadIndex > nativePassDesc.passEndIndex && target.lastReadIndex > nativePassDesc.passEndIndex;
+
+			// Store the msaa surface if this is depth and read later, since depth surfaces can not be resolved. Also store msaa if this surface is written to again later
+			var requiresMsaaStore = viewInfo.samples > 1 && (!isColor && (target.lastWriteIndex <= nativePassDesc.passEndIndex || target.lastWriteIndex >= nativePassDesc.passEndIndex) || target.lastWriteIndex > nativePassDesc.passEndIndex) && target.lastReadIndex > nativePassDesc.passEndIndex;
+
+			// Store the target if it is read outside of this renderpass, or if it is exported to an external resource
 			var requiresStore = target.lastReadIndex > nativePassDesc.passEndIndex || target.isExternal;
 
 			if (requiresResolve)

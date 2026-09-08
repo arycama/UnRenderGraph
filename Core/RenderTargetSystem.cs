@@ -48,6 +48,12 @@ public class RenderTargetSystem : IDisposable
 	public int AllocateTarget(RenderTargetHandle handle, int descriptorIndex, ViewInfo viewInfo, int samples, bool isUav)
 	{
 		var descriptor = descriptors[descriptorIndex].GetRenderTextureDescriptor(viewInfo, samples, isUav);
+		var exists = activeTargets.ContainsKey(handle);
+		if (exists)
+		{
+			//Debug.LogError($"Adding an already active texture {handle} {descriptor}");
+			throw new InvalidOperationException($"Adding an already active texture {handle} {descriptor}");
+		}
 
 		var resourceIndex = -1;
 		RenderTexture resource = null;
@@ -82,9 +88,9 @@ public class RenderTargetSystem : IDisposable
 			renderTextures.Add(resource);
 		}
 
-		var wasAdded = activeTargets.TryAdd(handle, (resource, resourceIndex));
-		if (!wasAdded)
-			Debug.LogError($"Adding an already active texture {handle} {descriptor}");
+		activeTargets.Add(handle, (resource, resourceIndex));
+		//if (!wasAdded)
+		//	Debug.LogError($"Adding an already active texture {handle} {descriptor}");
 
 		var index = renderTargets.Count;
 		renderTargets.Add(resource);
