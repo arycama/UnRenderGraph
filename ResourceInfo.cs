@@ -13,14 +13,14 @@ public struct ResourceInfo
 	public int propertyId;
 	public ResourceHandleType type;
 
-	public ResourceInfo(int descriptorIndex, int propertyId, ResourceHandleType type)
+	public ResourceInfo(int descriptorIndex, int propertyId, Range firstWriteIndexRange, ResourceHandleType type)
 	{
 		this.descriptorIndex = descriptorIndex;
 		this.propertyId = propertyId;
 		this.type = type;
+		this.firstWriteIndexRange = firstWriteIndexRange;
 		isExternal = false;
 		resourceIndex = -1;
-		firstWriteIndexRange = default;
 		lastWriteIndex = -1;
 		lastReadIndex = -1;
 	}

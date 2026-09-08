@@ -23,7 +23,7 @@ public class RenderGraph : IDisposable
 	private readonly ConstantBufferBuilder constantBufferBuilder;
 	private readonly ResizableArray<byte> constantBufferData = new();
 	private readonly List<(BufferHandle handle, Range range)> constantBufferRanges = new();
-	private readonly List<int> firstWriteIndices = new();
+	private readonly ResizableArray<int> firstWriteIndices = new();
 	public int FrameIndex { get; private set; }
 
 	public RenderGraph()
@@ -45,14 +45,14 @@ public class RenderGraph : IDisposable
 	public RenderTargetHandle GetTexture(RenderTargetDescriptor descriptor, int propertyId)
 	{
 		var descriptorIndex = renderTargetSystem.AddDescriptor(descriptor);
-		resourceInfo.Add(new(descriptorIndex, propertyId, ResourceHandleType.RenderTarget));
+		AddResource(descriptorIndex, propertyId, ResourceHandleType.RenderTarget);
 		return new(resourceInfo.Count - 1);
 	}
 
 	public BufferHandle GetBuffer(BufferDescriptor descriptor, int propertyId)
 	{
 		var index = bufferSystem.AddDescriptor(descriptor);
-		resourceInfo.Add(new(index, propertyId, ResourceHandleType.Buffer));
+		AddResource(index, propertyId, ResourceHandleType.Buffer);
 		return new(resourceInfo.Count - 1);
 	}
 
@@ -162,58 +162,43 @@ public class RenderGraph : IDisposable
 	private void SetResourceWriteIndex(ResourceHandle handle, int index, int subResourceIndex)
 	{
 		ref var target = ref resourceInfo[handle];
-
-		// Track the first pass this target is written to so we know when to clear. This also allows allocation to be skipped for textures that are never written to
-		if (target.firstWriteIndexRange.Start.Equals(default))
-		{
-			// We store a range for each resource based on the number of slices it has
-			if (handle.type == ResourceHandleType.RenderTarget)
-			{
-				var descriptor = renderTargetSystem.GetDescriptor(target.descriptorIndex);
-				var viewInfo = GetViewInfo(descriptor.viewHandle);
-
-				// Add the range for all slices
-				// TODO: Span?
-				var start = firstWriteIndices.Count;
-				for (var i = 0; i < viewInfo.volumeDepth; i++)
-				{
-					firstWriteIndices.Add(-1);
-				}
-
-				target.firstWriteIndexRange = start..firstWriteIndices.Count;
-			}
-			else
-			{
-				var start = firstWriteIndices.Count;
-				firstWriteIndices.Add(index);
-				target.firstWriteIndexRange = start..firstWriteIndices.Count;
-			}
-		}
-
-		// Now get the actual index for this texture and write to it
-		if (handle.type == ResourceHandleType.RenderTarget)
-		{
-			var range = target.firstWriteIndexRange;
-			if (subResourceIndex == -1)
-			{
-				// Index of -1 represents all
-				for (var i = range.Start.Value; i < range.End.Value; i++)
-				{
-					if (firstWriteIndices[i] == -1)
-						firstWriteIndices[i] = index;
-				}
-			}
-			else
-			{
-				// Otherwise write to only the specified index
-				var value = firstWriteIndices[target.firstWriteIndexRange.Start.Value + subResourceIndex];
-				if (value == -1)
-					firstWriteIndices[target.firstWriteIndexRange.Start.Value + subResourceIndex] = index;
-			}
-		}
-
-		// We also track the last write index so that we know when to resolve if msaa is enabled
 		target.lastWriteIndex = index;
+
+		var range = target.firstWriteIndexRange;
+		var start = range.Start.Value;
+		var end = range.End.Value;
+
+		if (subResourceIndex != -1)
+		{
+			start += subResourceIndex;
+			end = start + 1;
+		}
+
+		for (var i = start; i < end; i++)
+		{
+			ref var value = ref firstWriteIndices[i];
+			if (value == -1)
+				value = index;
+		}
+	}
+
+	private void AddResource(int descriptorIndex, int propertyId, ResourceHandleType handleType)
+	{
+		// Store a range for each resource based on the number of slices it has
+		var count = 1;
+		if (handleType == ResourceHandleType.RenderTarget)
+		{
+			// Add the range for all slices
+			var descriptor = renderTargetSystem.GetDescriptor(descriptorIndex);
+			var viewInfo = GetViewInfo(descriptor.viewHandle);
+			count = viewInfo.volumeDepth;
+		}
+
+		Span<int> values = stackalloc int[count];
+		values.Fill(-1);
+		var firstWriteIndexRange = firstWriteIndices.AddRange(values);
+
+		resourceInfo.Add(new(descriptorIndex, propertyId, firstWriteIndexRange, handleType));
 	}
 
 	public void ExportTexture(RenderTargetHandle handle, RenderTargetIdentifier id)
@@ -226,7 +211,7 @@ public class RenderGraph : IDisposable
 
 	public TextureHandle GetTextureHandle(Texture texture, int propertyId)
 	{
-		resourceInfo.Add(new(-1, propertyId, ResourceHandleType.Texture));
+		AddResource(-1, propertyId, ResourceHandleType.Texture);
 		var handle = new TextureHandle(resourceInfo.Count - 1);
 		var resourceIndex = textures.Count;
 		ref var target = ref resourceInfo[handle];
@@ -238,7 +223,7 @@ public class RenderGraph : IDisposable
 
 	public RayTracingAccelerationStructureHandle GetRtasHandle(RayTracingAccelerationStructure structure, int propertyId)
 	{
-		resourceInfo.Add(new(-1, propertyId, ResourceHandleType.RayTracingAccelerationStructure));
+		AddResource(-1, propertyId, ResourceHandleType.RayTracingAccelerationStructure);
 		var handle = new RayTracingAccelerationStructureHandle(resourceInfo.Count - 1);
 		var resourceIndex = rayTracingAccelerationStructures.Count;
 		ref var target = ref resourceInfo[handle];
@@ -356,7 +341,7 @@ public class RenderGraph : IDisposable
 			else if (requiresStore)
 			{
 				// A store is required if the target is read outside of this nativePass, or it is exported
-				if (!target.isExternal && target.resourceIndex == -1)
+				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, false, 1);
 
 				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
@@ -451,7 +436,7 @@ public class RenderGraph : IDisposable
 				var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start.Value];
 
 				// If this is the first time it is written, we need to allocate a texture
-				if (target.resourceIndex == -1 && !target.isExternal)
+				if (target.resourceIndex == -1)
 				{
 					if (handle.type == ResourceHandleType.RenderTarget)
 					{
