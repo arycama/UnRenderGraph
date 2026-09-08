@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 using Unmath;
+using static Unmath.Math;
 
 public class RenderGraph : IDisposable
 {
@@ -108,14 +109,14 @@ public class RenderGraph : IDisposable
 		if (builder.DepthStencil.index != -1)
 		{
 			// Depth stencil is counted as write and read since it is also 'read' for depth tests
-			SetResourceWriteIndex(builder.DepthStencil, builder.Index);
+			SetResourceWriteIndex(builder.DepthStencil, builder.Index, builder.DepthSlice);
 			SetResourceReadIndex(builder.DepthStencil, builder.Index);
 		}
 
 		foreach (var output in builder.Outputs)
 		{
 			// Outputs can be 'read' in the case of blending etc.
-			SetResourceWriteIndex(output, builder.Index);
+			SetResourceWriteIndex(output, builder.Index, builder.DepthSlice);
 			SetResourceReadIndex(output, builder.Index);
 		}
 
@@ -127,7 +128,7 @@ public class RenderGraph : IDisposable
 		foreach (var handle in builder.UavOutputs)
 		{
 			handles.Add(handle);
-			SetResourceWriteIndex(handle, builder.Index);
+			SetResourceWriteIndex(handle, builder.Index, 0);
 			SetResourceReadIndex(handle, builder.Index);
 		}
 
@@ -158,7 +159,7 @@ public class RenderGraph : IDisposable
 		target.lastReadIndex = index;
 	}
 
-	private void SetResourceWriteIndex(ResourceHandle handle, int index)
+	private void SetResourceWriteIndex(ResourceHandle handle, int index, int subResourceIndex)
 	{
 		ref var target = ref resourceInfo[handle];
 
@@ -166,9 +167,49 @@ public class RenderGraph : IDisposable
 		if (target.firstWriteIndexRange.Start.Equals(default))
 		{
 			// We store a range for each resource based on the number of slices it has
-			var start = firstWriteIndices.Count;
-			firstWriteIndices.Add(index);
-			target.firstWriteIndexRange = start..firstWriteIndices.Count;
+			if (handle.type == ResourceHandleType.RenderTarget)
+			{
+				var descriptor = renderTargetSystem.GetDescriptor(target.descriptorIndex);
+				var viewInfo = GetViewInfo(descriptor.viewHandle);
+
+				// Add the range for all slices
+				// TODO: Span?
+				var start = firstWriteIndices.Count;
+				for (var i = 0; i < viewInfo.volumeDepth; i++)
+				{
+					firstWriteIndices.Add(-1);
+				}
+
+				target.firstWriteIndexRange = start..firstWriteIndices.Count;
+			}
+			else
+			{
+				var start = firstWriteIndices.Count;
+				firstWriteIndices.Add(index);
+				target.firstWriteIndexRange = start..firstWriteIndices.Count;
+			}
+		}
+
+		// Now get the actual index for this texture and write to it
+		if (handle.type == ResourceHandleType.RenderTarget)
+		{
+			var range = target.firstWriteIndexRange;
+			if (subResourceIndex == -1)
+			{
+				// Index of -1 represents all
+				for (var i = range.Start.Value; i < range.End.Value; i++)
+				{
+					if (firstWriteIndices[i] == -1)
+						firstWriteIndices[i] = index;
+				}
+			}
+			else
+			{
+				// Otherwise write to only the specified index
+				var value = firstWriteIndices[target.firstWriteIndexRange.Start.Value + subResourceIndex];
+				if (value == -1)
+					firstWriteIndices[target.firstWriteIndexRange.Start.Value + subResourceIndex] = index;
+			}
 		}
 
 		// We also track the last write index so that we know when to resolve if msaa is enabled
@@ -230,7 +271,7 @@ public class RenderGraph : IDisposable
 	{
 		var range = constantBufferData.AddRange(data);
 		constantBufferRanges.Add((handle, range));
-		SetResourceWriteIndex(handle, 0);
+		SetResourceWriteIndex(handle, 0, 0);
 	}
 
 	public ConstantBufferBuilder AddConstantBuffer(string name, out BufferHandle handle)
@@ -261,7 +302,7 @@ public class RenderGraph : IDisposable
 			};
 
 			// Load the target if it has been written to before this renderpass, otherwise clear it if required
-			var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start];
+			var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start.Value + Max(0, nativePassDesc.depthSlice)];
 			var isFirstWrite = firstWriteIndex >= renderPassIndex;
 			if (isFirstWrite)
 			{
@@ -278,7 +319,7 @@ public class RenderGraph : IDisposable
 			else
 			{
 				// If this target has been written previously, it must be loaded
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, nativePassDesc.depthSlice);
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
 
 			var isColor = descriptor.format switch
@@ -299,7 +340,7 @@ public class RenderGraph : IDisposable
 			if (requiresResolve)
 			{
 				AllocateTexture(texture, viewHandle);
-				attachmentDesc.resolveTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, nativePassDesc.depthSlice);
+				attachmentDesc.resolveTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 				attachmentDesc.storeAction = RenderBufferStoreAction.Resolve;
 			}
 			else if (requiresMsaaStore)
@@ -308,7 +349,7 @@ public class RenderGraph : IDisposable
 				if (isFirstWrite)
 					AllocateTexture(texture, viewHandle, false, viewInfo.samples);
 
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, nativePassDesc.depthSlice);
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
 			else if (requiresStore)
 			{
@@ -316,7 +357,7 @@ public class RenderGraph : IDisposable
 				if (!target.isExternal && isFirstWrite)
 					AllocateTexture(texture, viewHandle, false, 1);
 
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, nativePassDesc.depthSlice);
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
 			else
 			{
@@ -405,7 +446,7 @@ public class RenderGraph : IDisposable
 			foreach (var handle in handles[renderPass.UavResourceRange])
 			{
 				ref var target = ref resourceInfo[handle];
-				var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start];
+				var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start.Value];
 
 				// If this is the first time it is written, we need to allocate a texture
 				if (i == firstWriteIndex && !target.isExternal)
