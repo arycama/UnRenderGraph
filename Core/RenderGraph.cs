@@ -339,14 +339,16 @@ public class RenderGraph : IDisposable
 
 			if (requiresResolve)
 			{
-				AllocateTexture(texture, viewHandle);
+				if (target.resourceIndex == -1)
+					AllocateTexture(texture, viewHandle);
+
 				attachmentDesc.resolveTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 				attachmentDesc.storeAction = RenderBufferStoreAction.Resolve;
 			}
 			else if (requiresMsaaStore)
 			{
 				// Depth targets can't be msaa resolved so we need to store the msaa version.
-				if (isFirstWrite)
+				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, false, viewInfo.samples);
 
 				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
@@ -354,7 +356,7 @@ public class RenderGraph : IDisposable
 			else if (requiresStore)
 			{
 				// A store is required if the target is read outside of this nativePass, or it is exported
-				if (!target.isExternal && isFirstWrite)
+				if (!target.isExternal && target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, false, 1);
 
 				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
@@ -449,7 +451,7 @@ public class RenderGraph : IDisposable
 				var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start.Value];
 
 				// If this is the first time it is written, we need to allocate a texture
-				if (i == firstWriteIndex && !target.isExternal)
+				if (target.resourceIndex == -1 && !target.isExternal)
 				{
 					if (handle.type == ResourceHandleType.RenderTarget)
 					{
