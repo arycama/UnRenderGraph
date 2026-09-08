@@ -22,6 +22,7 @@ public class RenderGraph : IDisposable
 	private readonly ConstantBufferBuilder constantBufferBuilder;
 	private readonly ResizableArray<byte> constantBufferData = new();
 	private readonly List<(BufferHandle handle, Range range)> constantBufferRanges = new();
+	private readonly List<int> firstWriteIndices = new();
 	public int FrameIndex { get; private set; }
 
 	public RenderGraph()
@@ -162,8 +163,13 @@ public class RenderGraph : IDisposable
 		ref var target = ref resourceInfo[handle];
 
 		// Track the first pass this target is written to so we know when to clear. This also allows allocation to be skipped for textures that are never written to
-		if (target.firstWriteIndex == -1)
-			target.firstWriteIndex = index;
+		if (target.firstWriteIndexRange.Start.Equals(default))
+		{
+			// We store a range for each resource based on the number of slices it has
+			var start = firstWriteIndices.Count;
+			firstWriteIndices.Add(index);
+			target.firstWriteIndexRange = start..firstWriteIndices.Count;
+		}
 
 		// We also track the last write index so that we know when to resolve if msaa is enabled
 		target.lastWriteIndex = index;
@@ -255,7 +261,8 @@ public class RenderGraph : IDisposable
 			};
 
 			// Load the target if it has been written to before this renderpass, otherwise clear it if required
-			var isFirstWrite = target.firstWriteIndex >= renderPassIndex;
+			var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start];
+			var isFirstWrite = firstWriteIndex >= renderPassIndex;
 			if (isFirstWrite)
 			{
 				if (descriptor.clear)
@@ -398,9 +405,10 @@ public class RenderGraph : IDisposable
 			foreach (var handle in handles[renderPass.UavResourceRange])
 			{
 				ref var target = ref resourceInfo[handle];
+				var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start];
 
 				// If this is the first time it is written, we need to allocate a texture
-				if (i == target.firstWriteIndex && !target.isExternal)
+				if (i == firstWriteIndex && !target.isExternal)
 				{
 					if (handle.type == ResourceHandleType.RenderTarget)
 					{
@@ -522,6 +530,7 @@ public class RenderGraph : IDisposable
 		textures.Clear();
 		constantBufferData.Clear();
 		constantBufferRanges.Clear();
+		firstWriteIndices.Clear();
 		renderTargetSystem.FreeUnreleasedResources();
 		bufferSystem.FreeUnreleasedResources();
 	}
