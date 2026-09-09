@@ -17,6 +17,7 @@ public class RenderGraph : IDisposable
 	private readonly BufferSystem bufferSystem = new();
 	private readonly List<RayTracingAccelerationStructure> rayTracingAccelerationStructures = new();
 	private readonly List<Texture> textures = new();
+	private readonly List<GraphicsBuffer> importedBuffers = new();
 	private readonly NativeRenderPassSystem nativeRenderPassSystem = new();
 	private readonly ResourceMap resourceMap = new();
 	private readonly PassBuilder passBuilder;
@@ -218,6 +219,18 @@ public class RenderGraph : IDisposable
 		target.resourceIndex = resourceIndex;
 		target.isExternal = true;
 		textures.Add(texture);
+		return handle;
+	}
+
+	public ImportedBufferHandle GetImportedBufferHandle(GraphicsBuffer buffer, int propertyId)
+	{
+		AddResource(-1, propertyId, ResourceHandleType.ImportedBuffer);
+		var handle = new ImportedBufferHandle(resourceInfo.Count - 1);
+		var resourceIndex = importedBuffers.Count;
+		ref var target = ref resourceInfo[handle];
+		target.resourceIndex = resourceIndex;
+		target.isExternal = true;
+		importedBuffers.Add(buffer);
 		return handle;
 	}
 
@@ -491,6 +504,12 @@ public class RenderGraph : IDisposable
 					command.SetGlobalTexture(target.propertyId, resource);
 				}
 
+				if (handle.type == ResourceHandleType.ImportedBuffer)
+				{
+					var resource = importedBuffers[target.resourceIndex];
+					command.SetGlobalBuffer(target.propertyId, resource);
+				}
+
 				if (handle.type == ResourceHandleType.RayTracingAccelerationStructure)
 				{
 					var resource = rayTracingAccelerationStructures[target.resourceIndex];
@@ -556,6 +575,7 @@ public class RenderGraph : IDisposable
 		resourceMap.Clear();
 		rayTracingAccelerationStructures.Clear();
 		textures.Clear();
+		importedBuffers.Clear();
 		constantBufferData.Clear();
 		constantBufferRanges.Clear();
 		firstWriteIndices.Clear();

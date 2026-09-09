@@ -82,7 +82,7 @@ public class RenderTargetSystem : IDisposable
 
 		if (resource == null)
 		{
-			resource = new RenderTexture(descriptor);
+			resource = new RenderTexture(descriptor) { hideFlags = HideFlags.HideAndDontSave, name = descriptor.ToString() };
 			_ = resource.Create();
 			resourceIndex = renderTextures.Count;
 			renderTextures.Add(resource);
