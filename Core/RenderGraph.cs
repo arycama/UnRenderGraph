@@ -470,10 +470,7 @@ public class RenderGraph : IDisposable
 				if (handle.type == ResourceHandleType.Buffer)
 				{
 					var resource = bufferSystem.GetBuffer(target.resourceIndex);
-
-					// Constant buffers are only ever set as uav write for the purposes of having their data set, so don't need to actually be set.
-					if (resource.target != GraphicsBuffer.Target.Constant)
-						command.SetGlobalBuffer(target.propertyId, resource);
+					command.SetGlobalBuffer(target.propertyId, resource);
 				}
 			}
 
@@ -488,11 +485,15 @@ public class RenderGraph : IDisposable
 					command.SetGlobalTexture(target.propertyId, resource);
 				}
 
-				if (handle.type == ResourceHandleType.Buffer)
+				if (handle.type == ResourceHandleType.Buffer || handle.type == ResourceHandleType.ImportedBuffer)
 				{
-					var resource = bufferSystem.GetBuffer(target.resourceIndex);
+					GraphicsBuffer resource;
+					if (handle.type == ResourceHandleType.Buffer)
+						resource = bufferSystem.GetBuffer(target.resourceIndex);
+					else
+						resource = importedBuffers[target.resourceIndex];
 
-					if (resource.target == GraphicsBuffer.Target.Constant)
+					if (resource.target.HasFlag(GraphicsBuffer.Target.Constant))
 						command.SetGlobalConstantBuffer(resource, target.propertyId, 0, resource.stride);
 					else
 						command.SetGlobalBuffer(target.propertyId, resource);
@@ -502,12 +503,6 @@ public class RenderGraph : IDisposable
 				{
 					var resource = textures[target.resourceIndex];
 					command.SetGlobalTexture(target.propertyId, resource);
-				}
-
-				if (handle.type == ResourceHandleType.ImportedBuffer)
-				{
-					var resource = importedBuffers[target.resourceIndex];
-					command.SetGlobalBuffer(target.propertyId, resource);
 				}
 
 				if (handle.type == ResourceHandleType.RayTracingAccelerationStructure)
