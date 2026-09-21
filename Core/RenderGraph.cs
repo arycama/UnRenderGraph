@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
@@ -263,7 +264,7 @@ public class RenderGraph : IDisposable
 	private void AllocateBuffer(BufferHandle handle)
 	{
 		ref var target = ref resourceInfo[handle];
-		target.resourceIndex = bufferSystem.AllocateBuffer(handle, target.descriptorIndex);
+		target.resourceIndex = bufferSystem.AllocateBuffer(target.descriptorIndex);
 	}
 
 	public void AddConstantBufferData(ReadOnlySpan<byte> data, BufferHandle handle)
@@ -519,7 +520,7 @@ public class RenderGraph : IDisposable
 						renderTargetSystem.ReleaseResource(target.resourceIndex);
 
 					if (handle.type == ResourceHandleType.Buffer)
-						bufferSystem.ReleaseResource(new(handle.index));
+						bufferSystem.ReleaseResource(target.resourceIndex);
 
 					target.resourceIndex = -1;
 				}
@@ -548,7 +549,7 @@ public class RenderGraph : IDisposable
 						renderTargetSystem.ReleaseResource(target.resourceIndex);
 
 					if (handle.type == ResourceHandleType.Buffer)
-						bufferSystem.ReleaseResource(new(handle.index));
+						bufferSystem.ReleaseResource(target.resourceIndex);
 
 					target.resourceIndex = -1;
 				}

@@ -2,22 +2,28 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Object = UnityEngine.Object;
 
 public class RenderTargetSystem : IDisposable
 {
 	private readonly List<RenderTargetIdentifier> renderTargets = new();
 	private readonly List<RenderTargetDescriptor> descriptors = new();
-	private readonly List<RenderTexture> renderTextures = new();
-	private readonly List<int> availableTargets = new();
-	private readonly List<int> renderTargetIndices = new();
+	private readonly List<RenderTexture> resources = new();
+	private readonly List<int> availableResources = new();
+	private readonly List<int> resourceIndices = new();
 
 	public void Dispose()
 	{
-		foreach (var target in renderTextures)
+		foreach (var target in resources)
 		{
 			// can be null due to renderdoc loading..
-			if(target != null && target.IsCreated())
+			if (target == null)
+				continue;
+
+			if (target.IsCreated())
 				target.Release();
+
+			Object.DestroyImmediate(target);
 		}
 	}
 
@@ -35,7 +41,7 @@ public class RenderTargetSystem : IDisposable
 	{
 		var index = renderTargets.Count;
 		renderTargets.Add(id);
-		renderTargetIndices.Add(-1);
+		resourceIndices.Add(-1);
 		return index;
 	}
 
@@ -48,14 +54,15 @@ public class RenderTargetSystem : IDisposable
 
 	public int AllocateTarget(int descriptorIndex, ViewInfo viewInfo, int samples, bool isUav)
 	{
-		var descriptor = descriptors[descriptorIndex].GetRenderTextureDescriptor(viewInfo, samples, isUav);
+		var baseDescriptor = descriptors[descriptorIndex];
+		var descriptor = baseDescriptor.GetRenderTextureDescriptor(viewInfo, samples, isUav);
 
 		var resourceIndex = -1;
 		RenderTexture resource = null;
-		for (var i = 0; i < availableTargets.Count; i++)
+		for (var i = 0; i < availableResources.Count; i++)
 		{
-			var targetIndex = availableTargets[i];
-			var target = renderTextures[targetIndex];
+			var targetIndex = availableResources[i];
+			var target = resources[targetIndex];
 
 			if (target.graphicsFormat != descriptor.graphicsFormat || target.depthStencilFormat != descriptor.depthStencilFormat || target.stencilFormat != descriptor.stencilFormat)
 				continue;
@@ -71,33 +78,33 @@ public class RenderTargetSystem : IDisposable
 
 			resource = target;
 			resourceIndex = targetIndex;
-			availableTargets.RemoveAt(i);
+			availableResources.RemoveAt(i);
 			break;
 		}
 
 		if (resource == null)
 		{
-			resource = new RenderTexture(descriptor) { hideFlags = HideFlags.HideAndDontSave, name = descriptor.ToString() };
+			resource = new RenderTexture(descriptor) { hideFlags = HideFlags.HideAndDontSave, name = $"{resources.Count} {descriptor.width}x{descriptor.height}x{descriptor.volumeDepth} {baseDescriptor.format} {baseDescriptor.dimension} aa:{descriptor.msaaSamples}" };
 			_ = resource.Create();
-			resourceIndex = renderTextures.Count;
-			renderTextures.Add(resource);
+			resourceIndex = resources.Count;
+			resources.Add(resource);
 		}
 
 		var index = renderTargets.Count;
 		renderTargets.Add(resource);
-		renderTargetIndices.Add(resourceIndex);
+		resourceIndices.Add(resourceIndex);
 		return index;
 	}
 
 	public void ReleaseResource(int resourceIndex)
 	{
-		availableTargets.Add(renderTargetIndices[resourceIndex]);
+		availableResources.Add(resourceIndices[resourceIndex]);
 	}
 
 	public void FreeUnreleasedResources()
 	{
 		renderTargets.Clear();
 		descriptors.Clear();
-		renderTargetIndices.Clear();
+		resourceIndices.Clear();
 	}
 }

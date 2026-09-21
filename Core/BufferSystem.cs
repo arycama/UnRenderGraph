@@ -4,14 +4,13 @@ using UnityEngine;
 
 public class BufferSystem : IDisposable
 {
-	private readonly Dictionary<BufferHandle, int> activeBuffers = new();
-	private readonly List<int> availableBuffers = new();
-	private readonly List<GraphicsBuffer> buffers = new();
 	private readonly List<BufferDescriptor> descriptors = new();
+	private readonly List<GraphicsBuffer> resources = new();
+	private readonly List<int> availableIndices = new();
 
 	public GraphicsBuffer GetBuffer(int index)
 	{
-		return buffers[index];
+		return resources[index];
 	}
 
 	public int AddDescriptor(BufferDescriptor descriptor)
@@ -21,15 +20,15 @@ public class BufferSystem : IDisposable
 		return descriptorIndex;
 	}
 
-	public int AllocateBuffer(BufferHandle handle, int descriptorIndex)
+	public int AllocateBuffer(int descriptorIndex)
 	{
 		var descriptor = descriptors[descriptorIndex];
 		var resourceIndex = -1;
 		GraphicsBuffer resource = null;
-		for (var i = 0; i < availableBuffers.Count; i++)
+		for (var i = 0; i < availableIndices.Count; i++)
 		{
-			var bufferIndex = availableBuffers[i];
-			var buffer = buffers[bufferIndex];
+			var bufferIndex = availableIndices[i];
+			var buffer = resources[bufferIndex];
 			if (buffer.stride != descriptor.stride)
 				continue;
 
@@ -44,51 +43,33 @@ public class BufferSystem : IDisposable
 
 			resource = buffer;
 			resourceIndex = bufferIndex;
-			availableBuffers.RemoveAt(i);
+			availableIndices.RemoveAt(i);
 			break;
 		}
 
 		if (resource == null)
 		{
 			resource = new GraphicsBuffer(descriptor.target, descriptor.usageFlags, descriptor.count, descriptor.stride);
-			resourceIndex = buffers.Count;
-			buffers.Add(resource);
+			resourceIndex = resources.Count;
+			resources.Add(resource);
 		}
-
-		var wasAdded = activeBuffers.TryAdd(handle, resourceIndex);
-		if (!wasAdded)
-			Debug.LogError($"Adding an already active Buffer {handle} {descriptor}");
 
 		return resourceIndex;
 	}
 
-	public void ReleaseResource(BufferHandle handle)
+	public void ReleaseResource(int resourceIndex)
 	{
-		if (!activeBuffers.TryGetValue(handle, out var resource))
-		{
-			Debug.LogError($"Removing a Buffer {handle} that was not active");
-			return;
-		}
-
-		_ = activeBuffers.Remove(handle);
-		availableBuffers.Add(resource);
+		availableIndices.Add(resourceIndex);
 	}
 
 	public void FreeUnreleasedResources()
 	{
-		foreach (var buffer in activeBuffers)
-		{
-			Debug.LogError($"Buffer {buffer.Value} was not released during frame");
-			availableBuffers.Add(buffer.Value);
-		}
-
-		activeBuffers.Clear();
 		descriptors.Clear();
 	}
 
 	public void Dispose()
 	{
-		foreach (var buffer in buffers)
+		foreach (var buffer in resources)
 			buffer.Release();
 	}
 }
