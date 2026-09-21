@@ -15,7 +15,7 @@ public class PassBuilder : IDisposable
 	public List<RenderTargetHandle> Outputs { get; } = new();
 	public List<ResourceHandle> UavOutputs { get; } = new();
 	public List<GlobalKeyword> Keywords { get; } = new();
-	public RenderTargetHandle DepthStencil { get; set; } = new(-1);
+	public RenderTargetHandle DepthStencil { get; set; } = new(-1, false);
 	public int DepthSlice { get; set; } = -1;
 	public int VolumeDepth { get; set; } = 1;
 
@@ -129,7 +129,7 @@ public class PassBuilder : IDisposable
 		Index = -1;
 		DepthSlice = -1;
 		VolumeDepth = 1;
-		DepthStencil = new(-1);
+		DepthStencil = new(-1, false);
 		RenderPass = null;
 		Resources.Clear();
 		Outputs.Clear();

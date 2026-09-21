@@ -5,12 +5,14 @@ using System.Diagnostics;
 public readonly struct ResourceHandle : IEquatable<ResourceHandle>
 {
 	public readonly int index;
+	public readonly bool isPersistent;
 	public readonly ResourceHandleType type;
 
-	public ResourceHandle(int index, ResourceHandleType type)
+	public ResourceHandle(int index, ResourceHandleType type, bool isPersistent)
 	{
 		this.index = index;
 		this.type = type;
+		this.isPersistent = isPersistent;
 	}
 
 	public override bool Equals(object obj)

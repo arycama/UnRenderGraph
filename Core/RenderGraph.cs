@@ -21,13 +21,13 @@ public class RenderGraph : IDisposable
 	private readonly List<ViewInfo> viewInfos = new();
 	private readonly ResizableArray<ResourceHandle> handles = new();
 	private readonly ResizableArray<ResourceInfo> resourceInfo = new();
+	private readonly ResizableArray<ResourceInfo> persistentResourceInfo = new();
 	private readonly List<BufferDescriptor> bufferDescriptors = new();
 	private readonly BufferSystem bufferSystem = new();
 	private readonly RenderTargetSystem renderTargetSystem = new();
 	private readonly List<RenderTargetDescriptor> renderTargetDescriptors = new();
 	private readonly List<RayTracingAccelerationStructure> rayTracingAccelerationStructures = new();
 	private readonly List<Texture> textures = new();
-	private readonly List<GraphicsBuffer> importedBuffers = new();
 	private readonly ConstantBufferBuilder constantBufferBuilder;
 	private readonly ResizableArray<byte> constantBufferData = new();
 	private readonly List<(BufferHandle handle, Range range)> constantBufferRanges = new();
@@ -51,31 +51,43 @@ public class RenderGraph : IDisposable
 		resourceMap.Clear();
 	}
 
-	public RenderTargetHandle GetTexture(RenderTargetDescriptor descriptor, int propertyId)
+	public RenderTargetHandle GetTexture(RenderTargetDescriptor descriptor, int propertyId, bool isPersistent = false)
 	{
 		var descriptorIndex = renderTargetDescriptors.Count;
 		renderTargetDescriptors.Add(descriptor);
-		AddResource(descriptorIndex, propertyId, ResourceHandleType.RenderTarget);
-		return new(resourceInfo.Count - 1);
+		var resourceIndex = AddResource(descriptorIndex, propertyId, ResourceHandleType.RenderTarget, isPersistent);
+		return new(resourceIndex, isPersistent);
 	}
 
-	public BufferHandle GetBuffer(BufferDescriptor descriptor, int propertyId)
+	public BufferHandle GetBuffer(BufferDescriptor descriptor, int propertyId, bool isPersistent = false)
 	{
 		var descriptorIndex = bufferDescriptors.Count;
 		bufferDescriptors.Add(descriptor);
-		AddResource(descriptorIndex, propertyId, ResourceHandleType.Buffer);
-		return new(resourceInfo.Count - 1);
+		var resourceIndex = AddResource(descriptorIndex, propertyId, ResourceHandleType.Buffer, isPersistent);
+		return new(resourceIndex, isPersistent);
+	}
+
+	private ref ResourceInfo GetResource(ResourceHandle handle)
+	{
+		return ref handle.isPersistent ? ref persistentResourceInfo[handle] : ref resourceInfo[handle];
+	}
+
+	public void ReleasePersistentResource(BufferHandle handle, int passIndex)
+	{
+		// TODO: Implement
+		//ref var target = ref resourceInfo[handle];
+		//target.lastReadIndex = passIndex;
 	}
 
 	public RenderTargetIdentifier GetTextureResource(RenderTargetHandle handle)
 	{
-		var target = resourceInfo[handle];
+		var target = GetResource(handle);
 		return renderTargetSystem.GetTexture(target.resourceIndex);
 	}
 
 	public GraphicsBuffer GetBufferResource(BufferHandle handle)
 	{
-		var target = resourceInfo[handle];
+		var target = GetResource(handle);
 		return bufferSystem.GetBuffer(target.resourceIndex);
 	}
 
@@ -159,20 +171,21 @@ public class RenderGraph : IDisposable
 		renderPasses.Add(renderPass);
 	}
 
-	public bool IsResourceWritten(ResourceHandle resource)
+	public bool IsResourceWritten(ResourceHandle handle)
 	{
-		return resourceInfo[resource].lastWriteIndex != -1;
+		var resourceInfo = GetResource(handle);
+		return resourceInfo.lastWriteIndex != -1;
 	}
 
 	private void SetResourceReadIndex(ResourceHandle handle, int index)
 	{
-		ref var target = ref resourceInfo[handle];
+		ref var target = ref GetResource(handle);
 		target.lastReadIndex = index;
 	}
 
 	private void SetResourceWriteIndex(ResourceHandle handle, int index, int subResourceIndex)
 	{
-		ref var target = ref resourceInfo[handle];
+		ref var target = ref GetResource(handle);
 		target.lastWriteIndex = index;
 
 		var range = target.firstWriteIndexRange;
@@ -193,7 +206,7 @@ public class RenderGraph : IDisposable
 		}
 	}
 
-	private void AddResource(int descriptorIndex, int propertyId, ResourceHandleType handleType)
+	private int AddResource(int descriptorIndex, int propertyId, ResourceHandleType handleType, bool isPersistent = false)
 	{
 		// Store a range for each resource based on the number of slices it has
 		var count = 1;
@@ -208,14 +221,27 @@ public class RenderGraph : IDisposable
 		Span<int> values = stackalloc int[count];
 		values.Fill(-1);
 		var firstWriteIndexRange = firstWriteIndices.AddRange(values);
+		var info = new ResourceInfo(descriptorIndex, propertyId, firstWriteIndexRange, handleType, isPersistent);
 
-		resourceInfo.Add(new(descriptorIndex, propertyId, firstWriteIndexRange, handleType));
+		int index;
+		if (isPersistent)
+		{
+			index = persistentResourceInfo.Count;
+			persistentResourceInfo.Add(info);
+		}
+		else
+		{
+			index = resourceInfo.Count;
+			resourceInfo.Add(info);
+		}
+
+		return index;
 	}
 
 	public void ExportTexture(RenderTargetHandle handle, RenderTargetIdentifier id)
 	{
 		var resourceIndex = renderTargetSystem.ExportTarget(id);
-		ref var target = ref resourceInfo[handle];
+		ref var target = ref GetResource(handle);
 		target.resourceIndex = resourceIndex;
 		target.isExternal = true;
 	}
@@ -225,22 +251,10 @@ public class RenderGraph : IDisposable
 		AddResource(-1, propertyId, ResourceHandleType.Texture);
 		var handle = new TextureHandle(resourceInfo.Count - 1);
 		var resourceIndex = textures.Count;
-		ref var target = ref resourceInfo[handle];
+		ref var target = ref GetResource(handle);
 		target.resourceIndex = resourceIndex;
 		target.isExternal = true;
 		textures.Add(texture);
-		return handle;
-	}
-
-	public ImportedBufferHandle GetImportedBufferHandle(GraphicsBuffer buffer, int propertyId)
-	{
-		AddResource(-1, propertyId, ResourceHandleType.ImportedBuffer);
-		var handle = new ImportedBufferHandle(resourceInfo.Count - 1);
-		var resourceIndex = importedBuffers.Count;
-		ref var target = ref resourceInfo[handle];
-		target.resourceIndex = resourceIndex;
-		target.isExternal = true;
-		importedBuffers.Add(buffer);
 		return handle;
 	}
 
@@ -249,7 +263,7 @@ public class RenderGraph : IDisposable
 		AddResource(-1, propertyId, ResourceHandleType.RayTracingAccelerationStructure);
 		var handle = new RayTracingAccelerationStructureHandle(resourceInfo.Count - 1);
 		var resourceIndex = rayTracingAccelerationStructures.Count;
-		ref var target = ref resourceInfo[handle];
+		ref var target = ref GetResource(handle);
 		target.resourceIndex = resourceIndex;
 		target.isExternal = true;
 		rayTracingAccelerationStructures.Add(structure);
@@ -263,16 +277,10 @@ public class RenderGraph : IDisposable
 		return new(index);
 	}
 
-	private void AllocateTexture(RenderTargetHandle handle, ViewHandle viewHandle, RenderTargetDescriptor descriptor, bool isUav = false, int samples = 1)
+	private void AllocateTexture(ResourceHandle handle, ViewHandle viewHandle, RenderTargetDescriptor descriptor, bool isUav = false, int samples = 1)
 	{
-		ref var target = ref resourceInfo[handle];
+		ref var target = ref GetResource(handle);
 		target.resourceIndex = renderTargetSystem.AllocateTarget(descriptor, viewInfos[viewHandle.index], samples, isUav);
-	}
-
-	private void AllocateBuffer(BufferHandle handle, BufferDescriptor descriptor)
-	{
-		ref var target = ref resourceInfo[handle];
-		target.resourceIndex = bufferSystem.AllocateBuffer(descriptor);
 	}
 
 	public void AddConstantBufferData(ReadOnlySpan<byte> data, BufferHandle handle)
@@ -282,11 +290,11 @@ public class RenderGraph : IDisposable
 		SetResourceWriteIndex(handle, 0, 0);
 	}
 
-	public ConstantBufferBuilder AddConstantBuffer(string name, out BufferHandle handle)
+	public ConstantBufferBuilder AddConstantBuffer(string name, out BufferHandle handle, bool isPersistent = false)
 	{
 		// Constant buffer gets built inside a using statement and then the actual descriptor is created after. So
 		// a handle that indicates the next available index is returned so that it will point to the correct data once the builder has completed
-		handle = new(resourceInfo.Count);
+		handle = new(resourceInfo.Count, isPersistent);
 		constantBufferBuilder.PropertyName = name;
 		return constantBufferBuilder;
 	}
@@ -302,7 +310,7 @@ public class RenderGraph : IDisposable
 		var attachmendIndices = new FixedBuffer<AttachmentDescriptor>(stackalloc AttachmentDescriptor[8]);
 		foreach (var texture in attachments)
 		{
-			ref var target = ref resourceInfo[texture];
+			ref var target = ref GetResource(texture);
 			var descriptor = renderTargetDescriptors[target.descriptorIndex];
 			var attachmentDesc = new AttachmentDescriptor
 			{
@@ -343,7 +351,7 @@ public class RenderGraph : IDisposable
 			var requiresMsaaStore = viewInfo.samples > 1 && (!isColor && (target.lastWriteIndex <= nativePassDesc.passEndIndex || target.lastWriteIndex >= nativePassDesc.passEndIndex) || target.lastWriteIndex > nativePassDesc.passEndIndex) && target.lastReadIndex > nativePassDesc.passEndIndex;
 
 			// Store the target if it is read outside of this renderpass, or if it is exported to an external resource
-			var requiresStore = target.lastReadIndex > nativePassDesc.passEndIndex || target.isExternal;
+			var requiresStore = target.lastReadIndex > nativePassDesc.passEndIndex || target.isExternal || target.isPersistent;
 
 			if (requiresResolve)
 			{
@@ -393,10 +401,10 @@ public class RenderGraph : IDisposable
 		var attachments = nativeRenderPassSystem.GetAttachments(nativePassDesc.attachments);
 		foreach (var attachment in attachments)
 		{
-			ref var target = ref resourceInfo[attachment];
+			ref var target = ref GetResource(attachment);
 
 			// Exported targets should never be released
-			if (target.isExternal)
+			if (target.isExternal || target.isPersistent)
 				continue;
 
 			// If the target needs to be read later, it can't be released yet
@@ -420,11 +428,13 @@ public class RenderGraph : IDisposable
 		foreach (var (handle, range) in constantBufferRanges)
 		{
 			// Don't allocate+fill buffers that are never read
-			var target = resourceInfo[handle];
+			ref var target = ref GetResource(handle);
 			if (target.lastReadIndex == -1)
 				continue;
 
-			AllocateBuffer(new(handle.index), bufferDescriptors[target.descriptorIndex]);
+			var descriptor = bufferDescriptors[target.descriptorIndex];
+			target.resourceIndex = bufferSystem.AllocateBuffer(descriptor);
+
 			var data = constantBufferData.AsSpan(range);
 			var buffer = GetBufferResource(handle);
 			command.SetBufferData(buffer, data.AsArray());
@@ -455,20 +465,20 @@ public class RenderGraph : IDisposable
 			// UAV resources are handled seperately so we need to write them here
 			foreach (var handle in handles[renderPass.UavResourceRange])
 			{
-				ref var target = ref resourceInfo[handle];
+				ref var target = ref GetResource(handle);
 				var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start.Value];
 
 				// If this is the first time it is written, we need to allocate a texture
 				if (target.resourceIndex == -1)
 				{
 					if (handle.type == ResourceHandleType.RenderTarget)
-					{
-						var descriptor = renderTargetDescriptors[target.descriptorIndex];
-						AllocateTexture(new(handle.index), descriptor.viewHandle, descriptor, true, 1);
-					}
+						AllocateTexture(handle, renderTargetDescriptors[target.descriptorIndex].viewHandle, renderTargetDescriptors[target.descriptorIndex], true, 1);
 
 					if (handle.type == ResourceHandleType.Buffer)
-						AllocateBuffer(new(handle.index), bufferDescriptors[target.descriptorIndex]);
+					{
+						var descriptor = bufferDescriptors[target.descriptorIndex];
+						target.resourceIndex = bufferSystem.AllocateBuffer(descriptor);
+					}
 				}
 
 				if (handle.type == ResourceHandleType.RenderTarget)
@@ -487,7 +497,7 @@ public class RenderGraph : IDisposable
 			// Set resources. Note this needs to happen after allocation, since we free any resources after this, and we don't want to accidentally free a resource that is being read
 			foreach (var handle in handles[renderPass.ResourceRange])
 			{
-				ref var target = ref resourceInfo[handle];
+				ref var target = ref GetResource(handle);
 
 				if (handle.type == ResourceHandleType.RenderTarget)
 				{
@@ -495,14 +505,9 @@ public class RenderGraph : IDisposable
 					command.SetGlobalTexture(target.propertyId, resource);
 				}
 
-				if (handle.type == ResourceHandleType.Buffer || handle.type == ResourceHandleType.ImportedBuffer)
+				if (handle.type == ResourceHandleType.Buffer)
 				{
-					GraphicsBuffer resource;
-					if (handle.type == ResourceHandleType.Buffer)
-						resource = bufferSystem.GetBuffer(target.resourceIndex);
-					else
-						resource = importedBuffers[target.resourceIndex];
-
+					var resource = bufferSystem.GetBuffer(target.resourceIndex);
 					if (resource.target.HasFlag(GraphicsBuffer.Target.Constant))
 						command.SetGlobalConstantBuffer(resource, target.propertyId, 0, resource.stride);
 					else
@@ -522,7 +527,7 @@ public class RenderGraph : IDisposable
 				}
 
 				// If this is the last time a resource is read, it can be freed for the next pass
-				if (i == target.lastReadIndex && !target.isExternal)
+				if (i == target.lastReadIndex && !target.isExternal && !target.isPersistent)
 				{
 					if (handle.type == ResourceHandleType.RenderTarget)
 						renderTargetSystem.ReleaseResource(target.resourceIndex);
@@ -548,10 +553,10 @@ public class RenderGraph : IDisposable
 			// Free any UAVs. This needs to be done after the pass, otherwise we might allocate and free a texture before the pass starts, allowing another UAV to be assigned to the same texture
 			foreach (var handle in handles[renderPass.UavResourceRange])
 			{
-				ref var target = ref resourceInfo[handle];
+				ref var target = ref GetResource(handle);
 
 				// If this is the last time a resource is read, it can be freed for the next pass
-				if (i == target.lastReadIndex && !target.isExternal)
+				if (i == target.lastReadIndex && !target.isExternal && !target.isPersistent)
 				{
 					if (handle.type == ResourceHandleType.RenderTarget)
 						renderTargetSystem.ReleaseResource(target.resourceIndex);
@@ -580,7 +585,6 @@ public class RenderGraph : IDisposable
 		resourceMap.Clear();
 		rayTracingAccelerationStructures.Clear();
 		textures.Clear();
-		importedBuffers.Clear();
 		constantBufferData.Clear();
 		constantBufferRanges.Clear();
 		firstWriteIndices.Clear();

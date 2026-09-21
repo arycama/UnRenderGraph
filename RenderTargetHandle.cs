@@ -5,10 +5,12 @@ using System.Diagnostics;
 public readonly struct RenderTargetHandle : IEquatable<RenderTargetHandle>
 {
 	public readonly int index;
+	public readonly bool isPersistent;
 
-	public RenderTargetHandle(int index)
+	public RenderTargetHandle(int index, bool isPersistent)
 	{
 		this.index = index;
+		this.isPersistent = isPersistent;
 	}
 
 	public override bool Equals(object obj)
@@ -38,6 +40,6 @@ public readonly struct RenderTargetHandle : IEquatable<RenderTargetHandle>
 
 	public static implicit operator int(RenderTargetHandle handle) => handle.index;
 
-	public static implicit operator ResourceHandle(RenderTargetHandle handle) => new(handle, ResourceHandleType.RenderTarget);
+	public static implicit operator ResourceHandle(RenderTargetHandle handle) => new(handle, ResourceHandleType.RenderTarget, handle.isPersistent);
 }
 

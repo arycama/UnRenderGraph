@@ -38,5 +38,5 @@ public readonly struct RayTracingAccelerationStructureHandle : IEquatable<RayTra
 
 	public static implicit operator int(RayTracingAccelerationStructureHandle handle) => handle.index;
 
-	public static implicit operator ResourceHandle(RayTracingAccelerationStructureHandle handle) => new(handle, ResourceHandleType.RayTracingAccelerationStructure);
+	public static implicit operator ResourceHandle(RayTracingAccelerationStructureHandle handle) => new(handle, ResourceHandleType.RayTracingAccelerationStructure, false);
 }

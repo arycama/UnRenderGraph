@@ -38,6 +38,6 @@ public readonly struct TextureHandle : IEquatable<TextureHandle>
 
 	public static implicit operator int(TextureHandle handle) => handle.index;
 
-	public static implicit operator ResourceHandle(TextureHandle handle) => new(handle, ResourceHandleType.Texture);
+	public static implicit operator ResourceHandle(TextureHandle handle) => new(handle, ResourceHandleType.Texture, false);
 }
 

@@ -5,10 +5,12 @@ using System.Diagnostics;
 public readonly struct BufferHandle : IEquatable<BufferHandle>
 {
 	public readonly int index;
+	public readonly bool isPersistent;
 
-	public BufferHandle(int index)
+	public BufferHandle(int index, bool isPersistent)
 	{
 		this.index = index;
+		this.isPersistent = isPersistent;
 	}
 
 	public override bool Equals(object obj)
@@ -38,5 +40,5 @@ public readonly struct BufferHandle : IEquatable<BufferHandle>
 
 	public static implicit operator int(BufferHandle handle) => handle.index;
 
-	public static implicit operator ResourceHandle(BufferHandle handle) => new(handle, ResourceHandleType.Buffer);
+	public static implicit operator ResourceHandle(BufferHandle handle) => new(handle, ResourceHandleType.Buffer, handle.isPersistent);
 }
