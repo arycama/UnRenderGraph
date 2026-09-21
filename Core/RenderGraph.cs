@@ -10,22 +10,28 @@ using static Unmath.Math;
 
 public class RenderGraph : IDisposable
 {
+	// Renderpasses
 	private readonly List<IRenderPass> renderPasses = new();
-	private readonly List<ViewInfo> viewInfos = new();
-	private readonly ResizableArray<ResourceInfo> resourceInfo = new();
-	private readonly ResizableArray<ResourceHandle> handles = new();
-	private readonly RenderTargetSystem renderTargetSystem = new();
-	private readonly BufferSystem bufferSystem = new();
-	private readonly List<RayTracingAccelerationStructure> rayTracingAccelerationStructures = new();
-	private readonly List<Texture> textures = new();
-	private readonly List<GraphicsBuffer> importedBuffers = new();
 	private readonly NativeRenderPassSystem nativeRenderPassSystem = new();
 	private readonly ResourceMap resourceMap = new();
 	private readonly PassBuilder passBuilder;
+	private readonly ResizableArray<int> firstWriteIndices = new();
+
+	// Resources
+	private readonly List<ViewInfo> viewInfos = new();
+	private readonly ResizableArray<ResourceHandle> handles = new();
+	private readonly ResizableArray<ResourceInfo> resourceInfo = new();
+	private readonly List<BufferDescriptor> bufferDescriptors = new();
+	private readonly BufferSystem bufferSystem = new();
+	private readonly RenderTargetSystem renderTargetSystem = new();
+	private readonly List<RenderTargetDescriptor> renderTargetDescriptors = new();
+	private readonly List<RayTracingAccelerationStructure> rayTracingAccelerationStructures = new();
+	private readonly List<Texture> textures = new();
+	private readonly List<GraphicsBuffer> importedBuffers = new();
 	private readonly ConstantBufferBuilder constantBufferBuilder;
 	private readonly ResizableArray<byte> constantBufferData = new();
 	private readonly List<(BufferHandle handle, Range range)> constantBufferRanges = new();
-	private readonly ResizableArray<int> firstWriteIndices = new();
+
 	public int FrameIndex { get; private set; }
 
 	public RenderGraph()
@@ -47,15 +53,17 @@ public class RenderGraph : IDisposable
 
 	public RenderTargetHandle GetTexture(RenderTargetDescriptor descriptor, int propertyId)
 	{
-		var descriptorIndex = renderTargetSystem.AddDescriptor(descriptor);
+		var descriptorIndex = renderTargetDescriptors.Count;
+		renderTargetDescriptors.Add(descriptor);
 		AddResource(descriptorIndex, propertyId, ResourceHandleType.RenderTarget);
 		return new(resourceInfo.Count - 1);
 	}
 
 	public BufferHandle GetBuffer(BufferDescriptor descriptor, int propertyId)
 	{
-		var index = bufferSystem.AddDescriptor(descriptor);
-		AddResource(index, propertyId, ResourceHandleType.Buffer);
+		var descriptorIndex = bufferDescriptors.Count;
+		bufferDescriptors.Add(descriptor);
+		AddResource(descriptorIndex, propertyId, ResourceHandleType.Buffer);
 		return new(resourceInfo.Count - 1);
 	}
 
@@ -192,7 +200,7 @@ public class RenderGraph : IDisposable
 		if (handleType == ResourceHandleType.RenderTarget)
 		{
 			// Add the range for all slices
-			var descriptor = renderTargetSystem.GetDescriptor(descriptorIndex);
+			var descriptor = renderTargetDescriptors[descriptorIndex];
 			var viewInfo = GetViewInfo(descriptor.viewHandle);
 			count = viewInfo.volumeDepth;
 		}
@@ -255,16 +263,16 @@ public class RenderGraph : IDisposable
 		return new(index);
 	}
 
-	private void AllocateTexture(RenderTargetHandle handle, ViewHandle viewHandle, bool isUav = false, int samples = 1)
+	private void AllocateTexture(RenderTargetHandle handle, ViewHandle viewHandle, RenderTargetDescriptor descriptor, bool isUav = false, int samples = 1)
 	{
 		ref var target = ref resourceInfo[handle];
-		target.resourceIndex = renderTargetSystem.AllocateTarget(target.descriptorIndex, viewInfos[viewHandle.index], samples, isUav);
+		target.resourceIndex = renderTargetSystem.AllocateTarget(descriptor, viewInfos[viewHandle.index], samples, isUav);
 	}
 
-	private void AllocateBuffer(BufferHandle handle)
+	private void AllocateBuffer(BufferHandle handle, BufferDescriptor descriptor)
 	{
 		ref var target = ref resourceInfo[handle];
-		target.resourceIndex = bufferSystem.AllocateBuffer(target.descriptorIndex);
+		target.resourceIndex = bufferSystem.AllocateBuffer(descriptor);
 	}
 
 	public void AddConstantBufferData(ReadOnlySpan<byte> data, BufferHandle handle)
@@ -295,7 +303,7 @@ public class RenderGraph : IDisposable
 		foreach (var texture in attachments)
 		{
 			ref var target = ref resourceInfo[texture];
-			var descriptor = renderTargetSystem.GetDescriptor(target.descriptorIndex);
+			var descriptor = renderTargetDescriptors[target.descriptorIndex];
 			var attachmentDesc = new AttachmentDescriptor
 			{
 				graphicsFormat = descriptor.format,
@@ -340,7 +348,7 @@ public class RenderGraph : IDisposable
 			if (requiresResolve)
 			{
 				if (target.resourceIndex == -1)
-					AllocateTexture(texture, viewHandle);
+					AllocateTexture(texture, viewHandle, descriptor);
 
 				attachmentDesc.resolveTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 				attachmentDesc.storeAction = RenderBufferStoreAction.Resolve;
@@ -349,7 +357,7 @@ public class RenderGraph : IDisposable
 			{
 				// Depth targets can't be msaa resolved so we need to store the msaa version.
 				if (target.resourceIndex == -1)
-					AllocateTexture(texture, viewHandle, false, viewInfo.samples);
+					AllocateTexture(texture, viewHandle, descriptor, false, viewInfo.samples);
 
 				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
@@ -357,7 +365,7 @@ public class RenderGraph : IDisposable
 			{
 				// A store is required if the target is read outside of this nativePass, or it is exported
 				if (target.resourceIndex == -1)
-					AllocateTexture(texture, viewHandle, false, 1);
+					AllocateTexture(texture, viewHandle, descriptor, false, 1);
 
 				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
@@ -416,7 +424,7 @@ public class RenderGraph : IDisposable
 			if (target.lastReadIndex == -1)
 				continue;
 
-			AllocateBuffer(new(handle.index));
+			AllocateBuffer(new(handle.index), bufferDescriptors[target.descriptorIndex]);
 			var data = constantBufferData.AsSpan(range);
 			var buffer = GetBufferResource(handle);
 			command.SetBufferData(buffer, data.AsArray());
@@ -455,12 +463,12 @@ public class RenderGraph : IDisposable
 				{
 					if (handle.type == ResourceHandleType.RenderTarget)
 					{
-						var descriptor = renderTargetSystem.GetDescriptor(target.descriptorIndex);
-						AllocateTexture(new(handle.index), descriptor.viewHandle, true, 1);
+						var descriptor = renderTargetDescriptors[target.descriptorIndex];
+						AllocateTexture(new(handle.index), descriptor.viewHandle, descriptor, true, 1);
 					}
 
 					if (handle.type == ResourceHandleType.Buffer)
-						AllocateBuffer(new(handle.index));
+						AllocateBuffer(new(handle.index), bufferDescriptors[target.descriptorIndex]);
 				}
 
 				if (handle.type == ResourceHandleType.RenderTarget)
@@ -576,7 +584,8 @@ public class RenderGraph : IDisposable
 		constantBufferData.Clear();
 		constantBufferRanges.Clear();
 		firstWriteIndices.Clear();
+		bufferDescriptors.Clear();
+		renderTargetDescriptors.Clear();
 		renderTargetSystem.FreeUnreleasedResources();
-		bufferSystem.FreeUnreleasedResources();
 	}
 }

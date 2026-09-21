@@ -7,7 +7,6 @@ using Object = UnityEngine.Object;
 public class RenderTargetSystem : IDisposable
 {
 	private readonly List<RenderTargetIdentifier> renderTargets = new();
-	private readonly List<RenderTargetDescriptor> descriptors = new();
 	private readonly List<RenderTexture> resources = new();
 	private readonly List<int> availableResources = new();
 	private readonly List<int> resourceIndices = new();
@@ -32,10 +31,6 @@ public class RenderTargetSystem : IDisposable
 		return renderTargets[index];
 	}
 
-	public RenderTargetDescriptor GetDescriptor(int index)
-	{
-		return descriptors[index];
-	}
 
 	public int ExportTarget(RenderTargetIdentifier id)
 	{
@@ -45,17 +40,9 @@ public class RenderTargetSystem : IDisposable
 		return index;
 	}
 
-	public int AddDescriptor(RenderTargetDescriptor descriptor)
+	public int AllocateTarget(RenderTargetDescriptor descriptor, ViewInfo viewInfo, int samples, bool isUav)
 	{
-		var descriptorIndex = descriptors.Count;
-		descriptors.Add(descriptor);
-		return descriptorIndex;
-	}
-
-	public int AllocateTarget(int descriptorIndex, ViewInfo viewInfo, int samples, bool isUav)
-	{
-		var baseDescriptor = descriptors[descriptorIndex];
-		var descriptor = baseDescriptor.GetRenderTextureDescriptor(viewInfo, samples, isUav);
+		var rtDescriptor = descriptor.GetRenderTextureDescriptor(viewInfo, samples, isUav);
 
 		var resourceIndex = -1;
 		RenderTexture resource = null;
@@ -64,16 +51,16 @@ public class RenderTargetSystem : IDisposable
 			var targetIndex = availableResources[i];
 			var target = resources[targetIndex];
 
-			if (target.graphicsFormat != descriptor.graphicsFormat || target.depthStencilFormat != descriptor.depthStencilFormat || target.stencilFormat != descriptor.stencilFormat)
+			if (target.graphicsFormat != rtDescriptor.graphicsFormat || target.depthStencilFormat != rtDescriptor.depthStencilFormat || target.stencilFormat != rtDescriptor.stencilFormat)
 				continue;
 
-			if (target.dimension != descriptor.dimension)
+			if (target.dimension != rtDescriptor.dimension)
 				continue;
 
-			if (target.width != descriptor.width || target.height != descriptor.height || target.volumeDepth != descriptor.volumeDepth)
+			if (target.width != rtDescriptor.width || target.height != rtDescriptor.height || target.volumeDepth != rtDescriptor.volumeDepth)
 				continue;
 
-			if (target.enableRandomWrite != descriptor.enableRandomWrite || target.antiAliasing != descriptor.msaaSamples || target.bindTextureMS != descriptor.bindMS)
+			if (target.enableRandomWrite != rtDescriptor.enableRandomWrite || target.antiAliasing != rtDescriptor.msaaSamples || target.bindTextureMS != rtDescriptor.bindMS)
 				continue;
 
 			resource = target;
@@ -84,7 +71,7 @@ public class RenderTargetSystem : IDisposable
 
 		if (resource == null)
 		{
-			resource = new RenderTexture(descriptor) { hideFlags = HideFlags.HideAndDontSave, name = $"{resources.Count} {descriptor.width}x{descriptor.height}x{descriptor.volumeDepth} {baseDescriptor.format} {baseDescriptor.dimension} aa:{descriptor.msaaSamples}" };
+			resource = new RenderTexture(rtDescriptor) { hideFlags = HideFlags.HideAndDontSave, name = $"{resources.Count} {rtDescriptor.width}x{rtDescriptor.height}x{rtDescriptor.volumeDepth} {descriptor.format} {descriptor.dimension} aa:{rtDescriptor.msaaSamples}" };
 			_ = resource.Create();
 			resourceIndex = resources.Count;
 			resources.Add(resource);
@@ -104,7 +91,6 @@ public class RenderTargetSystem : IDisposable
 	public void FreeUnreleasedResources()
 	{
 		renderTargets.Clear();
-		descriptors.Clear();
 		resourceIndices.Clear();
 	}
 }

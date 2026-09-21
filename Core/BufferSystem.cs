@@ -4,7 +4,6 @@ using UnityEngine;
 
 public class BufferSystem : IDisposable
 {
-	private readonly List<BufferDescriptor> descriptors = new();
 	private readonly List<GraphicsBuffer> resources = new();
 	private readonly List<int> availableIndices = new();
 
@@ -13,16 +12,8 @@ public class BufferSystem : IDisposable
 		return resources[index];
 	}
 
-	public int AddDescriptor(BufferDescriptor descriptor)
+	public int AllocateBuffer(BufferDescriptor descriptor)
 	{
-		var descriptorIndex = descriptors.Count;
-		descriptors.Add(descriptor);
-		return descriptorIndex;
-	}
-
-	public int AllocateBuffer(int descriptorIndex)
-	{
-		var descriptor = descriptors[descriptorIndex];
 		var resourceIndex = -1;
 		GraphicsBuffer resource = null;
 		for (var i = 0; i < availableIndices.Count; i++)
@@ -49,8 +40,8 @@ public class BufferSystem : IDisposable
 
 		if (resource == null)
 		{
-			resource = new GraphicsBuffer(descriptor.target, descriptor.usageFlags, descriptor.count, descriptor.stride);
 			resourceIndex = resources.Count;
+			resource = new GraphicsBuffer(descriptor.target, descriptor.usageFlags, descriptor.count, descriptor.stride) { name = $"{resourceIndex} {descriptor.stride}x{descriptor.count} {descriptor.target} {descriptor.usageFlags}" };
 			resources.Add(resource);
 		}
 
@@ -60,11 +51,6 @@ public class BufferSystem : IDisposable
 	public void ReleaseResource(int resourceIndex)
 	{
 		availableIndices.Add(resourceIndex);
-	}
-
-	public void FreeUnreleasedResources()
-	{
-		descriptors.Clear();
 	}
 
 	public void Dispose()
