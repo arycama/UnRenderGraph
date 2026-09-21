@@ -36,6 +36,7 @@ public class RenderGraph : IDisposable
 	public void Dispose()
 	{
 		bufferSystem.Dispose();
+		renderTargetSystem.Dispose();
 	}
 
 	public void BeginCamera()
@@ -256,7 +257,7 @@ public class RenderGraph : IDisposable
 	private void AllocateTexture(RenderTargetHandle handle, ViewHandle viewHandle, bool isUav = false, int samples = 1)
 	{
 		ref var target = ref resourceInfo[handle];
-		target.resourceIndex = renderTargetSystem.AllocateTarget(handle, target.descriptorIndex, viewInfos[viewHandle.index], samples, isUav);
+		target.resourceIndex = renderTargetSystem.AllocateTarget(target.descriptorIndex, viewInfos[viewHandle.index], samples, isUav);
 	}
 
 	private void AllocateBuffer(BufferHandle handle)
@@ -397,7 +398,7 @@ public class RenderGraph : IDisposable
 			if (target.resourceIndex == -1)
 				continue;
 
-			renderTargetSystem.ReleaseResource(attachment);
+			renderTargetSystem.ReleaseResource(target.resourceIndex);
 			target.resourceIndex = -1;
 		}
 	}
@@ -515,7 +516,7 @@ public class RenderGraph : IDisposable
 				if (i == target.lastReadIndex && !target.isExternal)
 				{
 					if (handle.type == ResourceHandleType.RenderTarget)
-						renderTargetSystem.ReleaseResource(new(handle.index));
+						renderTargetSystem.ReleaseResource(target.resourceIndex);
 
 					if (handle.type == ResourceHandleType.Buffer)
 						bufferSystem.ReleaseResource(new(handle.index));
@@ -544,7 +545,7 @@ public class RenderGraph : IDisposable
 				if (i == target.lastReadIndex && !target.isExternal)
 				{
 					if (handle.type == ResourceHandleType.RenderTarget)
-						renderTargetSystem.ReleaseResource(new(handle.index));
+						renderTargetSystem.ReleaseResource(target.resourceIndex);
 
 					if (handle.type == ResourceHandleType.Buffer)
 						bufferSystem.ReleaseResource(new(handle.index));

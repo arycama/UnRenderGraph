@@ -5,18 +5,18 @@ using UnityEngine.Rendering;
 
 public class RenderTargetSystem : IDisposable
 {
-	private readonly Dictionary<RenderTargetHandle, (RenderTexture target, int index)> activeTargets = new();
 	private readonly List<RenderTargetIdentifier> renderTargets = new();
 	private readonly List<RenderTargetDescriptor> descriptors = new();
 	private readonly List<RenderTexture> renderTextures = new();
 	private readonly List<int> availableTargets = new();
+	private readonly List<int> renderTargetIndices = new();
 
 	public void Dispose()
 	{
 		foreach (var target in renderTextures)
 		{
 			// can be null due to renderdoc loading..
-			if(target != null)
+			if(target != null && target.IsCreated())
 				target.Release();
 		}
 	}
@@ -35,6 +35,7 @@ public class RenderTargetSystem : IDisposable
 	{
 		var index = renderTargets.Count;
 		renderTargets.Add(id);
+		renderTargetIndices.Add(-1);
 		return index;
 	}
 
@@ -45,15 +46,9 @@ public class RenderTargetSystem : IDisposable
 		return descriptorIndex;
 	}
 
-	public int AllocateTarget(RenderTargetHandle handle, int descriptorIndex, ViewInfo viewInfo, int samples, bool isUav)
+	public int AllocateTarget(int descriptorIndex, ViewInfo viewInfo, int samples, bool isUav)
 	{
 		var descriptor = descriptors[descriptorIndex].GetRenderTextureDescriptor(viewInfo, samples, isUav);
-		var exists = activeTargets.ContainsKey(handle);
-		if (exists)
-		{
-			//Debug.LogError($"Adding an already active texture {handle} {descriptor}");
-			throw new InvalidOperationException($"Adding an already active texture {handle} {descriptor}");
-		}
 
 		var resourceIndex = -1;
 		RenderTexture resource = null;
@@ -88,37 +83,21 @@ public class RenderTargetSystem : IDisposable
 			renderTextures.Add(resource);
 		}
 
-		activeTargets.Add(handle, (resource, resourceIndex));
-		//if (!wasAdded)
-		//	Debug.LogError($"Adding an already active texture {handle} {descriptor}");
-
 		var index = renderTargets.Count;
 		renderTargets.Add(resource);
+		renderTargetIndices.Add(resourceIndex);
 		return index;
 	}
 
-	public void ReleaseResource(RenderTargetHandle handle)
+	public void ReleaseResource(int resourceIndex)
 	{
-		if (!activeTargets.TryGetValue(handle, out var resource))
-		{
-			Debug.LogError($"Removing a texture {handle} that was not active");
-			return;
-		}
-
-		_ = activeTargets.Remove(handle);
-		availableTargets.Add(resource.index);
+		availableTargets.Add(renderTargetIndices[resourceIndex]);
 	}
 
 	public void FreeUnreleasedResources()
 	{
-		foreach (var target in activeTargets)
-		{
-			Debug.LogError($"Texture {target} was not released during frame");
-			availableTargets.Add(target.Value.index);
-		}
-
-		activeTargets.Clear();
 		renderTargets.Clear();
 		descriptors.Clear();
+		renderTargetIndices.Clear();
 	}
 }
