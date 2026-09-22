@@ -22,10 +22,12 @@ public class RenderGraph : IDisposable
 	private readonly ResizableArray<ResourceInfo> resourceInfo = new();
 	private readonly FreeList<ResourceInfo> persistentResourceInfo = new();
 	private readonly List<int> persistentResourcesToFree = new();
+	private readonly List<int> persistentDescriptorsToFree = new();
 	private readonly List<BufferDescriptor> bufferDescriptors = new();
 	private readonly BufferSystem bufferSystem = new();
 	private readonly RenderTargetSystem renderTargetSystem = new();
 	private readonly List<RenderTargetDescriptor> renderTargetDescriptors = new();
+	private readonly FreeList<RenderTargetDescriptor> persistentRenderTargetDescriptors = new();
 	private readonly List<RayTracingAccelerationStructure> rayTracingAccelerationStructures = new();
 	private readonly List<Texture> textures = new();
 	private readonly ConstantBufferBuilder constantBufferBuilder;
@@ -53,8 +55,17 @@ public class RenderGraph : IDisposable
 
 	public RenderTargetHandle GetTexture(RenderTargetDescriptor descriptor, int propertyId, bool isPersistent = false)
 	{
-		var descriptorIndex = renderTargetDescriptors.Count;
-		renderTargetDescriptors.Add(descriptor);
+		int descriptorIndex;
+		if (isPersistent)
+		{
+			descriptorIndex = persistentRenderTargetDescriptors.Add(descriptor);
+		}
+		else
+		{
+			descriptorIndex = renderTargetDescriptors.Count;
+			renderTargetDescriptors.Add(descriptor);
+		}
+
 		var resourceIndex = AddResource(descriptorIndex, ResourceHandleType.RenderTarget, isPersistent);
 		return new(resourceIndex, propertyId, isPersistent);
 	}
@@ -77,6 +88,7 @@ public class RenderGraph : IDisposable
 		ref var resourceInfo = ref persistentResourceInfo[handle];
 		resourceInfo.isPersistent = false;
 		persistentResourcesToFree.Add(handle.index);
+		persistentDescriptorsToFree.Add(resourceInfo.descriptorIndex);
 	}
 
 	public RenderTargetIdentifier GetTextureResource(RenderTargetHandle handle)
@@ -213,7 +225,7 @@ public class RenderGraph : IDisposable
 		if (handleType == ResourceHandleType.RenderTarget)
 		{
 			// Add the range for all slices
-			var descriptor = renderTargetDescriptors[descriptorIndex];
+			var descriptor = isPersistent ? persistentRenderTargetDescriptors[descriptorIndex] : renderTargetDescriptors[descriptorIndex];
 			var viewInfo = GetViewInfo(descriptor.viewHandle);
 			count = viewInfo.volumeDepth;
 		}
@@ -328,7 +340,7 @@ public class RenderGraph : IDisposable
 		foreach (var texture in attachments)
 		{
 			ref var target = ref GetResource(texture);
-			var descriptor = renderTargetDescriptors[target.descriptorIndex];
+			var descriptor = texture.isPersistent ? persistentRenderTargetDescriptors[target.descriptorIndex] : renderTargetDescriptors[target.descriptorIndex];
 			var attachmentDesc = new AttachmentDescriptor
 			{
 				graphicsFormat = descriptor.format,
@@ -433,7 +445,7 @@ public class RenderGraph : IDisposable
 				continue;
 
 			renderTargetSystem.ReleaseResource(target.resourceIndex);
-			target.resourceIndex = -1;
+			//target.resourceIndex = -1;
 		}
 	}
 
@@ -506,7 +518,7 @@ public class RenderGraph : IDisposable
 					if (handle.type == ResourceHandleType.Buffer)
 						bufferSystem.ReleaseResource(target.resourceIndex);
 
-					target.resourceIndex = -1;
+					//target.resourceIndex = -1;
 				}
 			}
 
@@ -519,7 +531,10 @@ public class RenderGraph : IDisposable
 				if (target.resourceIndex == -1)
 				{
 					if (handle.type == ResourceHandleType.RenderTarget)
-						AllocateTexture(handle, renderTargetDescriptors[target.descriptorIndex].viewHandle, renderTargetDescriptors[target.descriptorIndex], true, 1);
+					{
+						var descriptor = handle.isPersistent ? persistentRenderTargetDescriptors[target.descriptorIndex] : renderTargetDescriptors[target.descriptorIndex];
+						AllocateTexture(handle, descriptor.viewHandle, descriptor, true, 1);
+					}
 
 					if (handle.type == ResourceHandleType.Buffer)
 					{
@@ -565,7 +580,7 @@ public class RenderGraph : IDisposable
 				if (handle.type == ResourceHandleType.Buffer)
 					bufferSystem.ReleaseResource(target.resourceIndex);
 
-				target.resourceIndex = -1;
+				//target.resourceIndex = -1;
 			}
 		}
 
@@ -594,7 +609,10 @@ public class RenderGraph : IDisposable
 
 		foreach (var index in persistentResourcesToFree)
 			persistentResourceInfo.Free(index);
-
 		persistentResourcesToFree.Clear();
+
+		foreach (var index in persistentDescriptorsToFree)
+			persistentRenderTargetDescriptors.Free(index);
+		persistentDescriptorsToFree.Clear();
 	}
 }
