@@ -7,11 +7,13 @@ public readonly struct ResourceHandle : IEquatable<ResourceHandle>
 	public readonly int index;
 	public readonly bool isPersistent;
 	public readonly ResourceHandleType type;
+	public readonly int propertyId;
 
-	public ResourceHandle(int index, ResourceHandleType type, bool isPersistent)
+	public ResourceHandle(int index, ResourceHandleType type, int propertyId, bool isPersistent)
 	{
 		this.index = index;
 		this.type = type;
+		this.propertyId = propertyId;
 		this.isPersistent = isPersistent;
 	}
 

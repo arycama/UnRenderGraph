@@ -5,10 +5,12 @@ using System.Diagnostics;
 public readonly struct TextureHandle : IEquatable<TextureHandle>
 {
 	public readonly int index;
+	public readonly int propertyId;
 
-	public TextureHandle(int index)
+	public TextureHandle(int index, int propertyId)
 	{
 		this.index = index;
+		this.propertyId = propertyId;
 	}
 
 	public override bool Equals(object obj)
@@ -38,6 +40,6 @@ public readonly struct TextureHandle : IEquatable<TextureHandle>
 
 	public static implicit operator int(TextureHandle handle) => handle.index;
 
-	public static implicit operator ResourceHandle(TextureHandle handle) => new(handle, ResourceHandleType.Texture, false);
+	public static implicit operator ResourceHandle(TextureHandle handle) => new(handle.index, ResourceHandleType.Texture, handle.propertyId, false);
 }
 

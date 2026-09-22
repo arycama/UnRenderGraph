@@ -5,11 +5,13 @@ using System.Diagnostics;
 public readonly struct RenderTargetHandle : IEquatable<RenderTargetHandle>
 {
 	public readonly int index;
+	public readonly int propertyId;
 	public readonly bool isPersistent;
 
-	public RenderTargetHandle(int index, bool isPersistent)
+	public RenderTargetHandle(int index, int propertyId, bool isPersistent)
 	{
 		this.index = index;
+		this.propertyId = propertyId;
 		this.isPersistent = isPersistent;
 	}
 
@@ -40,6 +42,6 @@ public readonly struct RenderTargetHandle : IEquatable<RenderTargetHandle>
 
 	public static implicit operator int(RenderTargetHandle handle) => handle.index;
 
-	public static implicit operator ResourceHandle(RenderTargetHandle handle) => new(handle, ResourceHandleType.RenderTarget, handle.isPersistent);
+	public static implicit operator ResourceHandle(RenderTargetHandle handle) => new(handle.index, ResourceHandleType.RenderTarget, handle.propertyId, handle.isPersistent);
 }
 

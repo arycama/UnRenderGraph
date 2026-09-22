@@ -5,10 +5,12 @@ using System.Diagnostics;
 public readonly struct RayTracingAccelerationStructureHandle : IEquatable<RayTracingAccelerationStructureHandle>
 {
 	public readonly int index;
+	public readonly int propertyId;
 
-	public RayTracingAccelerationStructureHandle(int index)
+	public RayTracingAccelerationStructureHandle(int index, int propertyId)
 	{
 		this.index = index;
+		this.propertyId = propertyId;
 	}
 
 	public override bool Equals(object obj)
@@ -38,5 +40,5 @@ public readonly struct RayTracingAccelerationStructureHandle : IEquatable<RayTra
 
 	public static implicit operator int(RayTracingAccelerationStructureHandle handle) => handle.index;
 
-	public static implicit operator ResourceHandle(RayTracingAccelerationStructureHandle handle) => new(handle, ResourceHandleType.RayTracingAccelerationStructure, false);
+	public static implicit operator ResourceHandle(RayTracingAccelerationStructureHandle handle) => new(handle.index, ResourceHandleType.RayTracingAccelerationStructure, handle.propertyId, false);
 }

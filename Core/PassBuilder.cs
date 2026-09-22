@@ -15,7 +15,7 @@ public class PassBuilder : IDisposable
 	public List<RenderTargetHandle> Outputs { get; } = new();
 	public List<ResourceHandle> UavOutputs { get; } = new();
 	public List<GlobalKeyword> Keywords { get; } = new();
-	public RenderTargetHandle DepthStencil { get; set; } = new(-1, false);
+	public RenderTargetHandle DepthStencil { get; set; } = new(-1, default, false);
 	public int DepthSlice { get; set; } = -1;
 	public int VolumeDepth { get; set; } = 1;
 
@@ -81,6 +81,8 @@ public class PassBuilder : IDisposable
 
 	public void AddResource(ResourceHandle resource) => Resources.Add(resource);
 
+	public void AddResource(ResourceHandle resource, int propertyId) => Resources.Add(new(resource.index, resource.type, propertyId, resource.isPersistent));
+
 	public void AddResources(Span<ResourceHandle> resources)
 	{
 		foreach (var resource in resources)
@@ -134,7 +136,7 @@ public class PassBuilder : IDisposable
 		Index = -1;
 		DepthSlice = -1;
 		VolumeDepth = 1;
-		DepthStencil = new(-1, false);
+		DepthStencil = new(-1, default, false);
 		RenderPass = null;
 		Resources.Clear();
 		Outputs.Clear();
