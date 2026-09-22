@@ -49,7 +49,7 @@ public class RenderTargetSystem : IDisposable
 			if (target.graphicsFormat != rtDescriptor.graphicsFormat || target.depthStencilFormat != rtDescriptor.depthStencilFormat || target.stencilFormat != rtDescriptor.stencilFormat)
 				continue;
 
-			if (target.dimension != rtDescriptor.dimension)
+			if (target.dimension != rtDescriptor.dimension || target.useMipMap != rtDescriptor.useMipMap)
 				continue;
 
 			if (target.width != rtDescriptor.width || target.height != rtDescriptor.height || target.volumeDepth != rtDescriptor.volumeDepth)

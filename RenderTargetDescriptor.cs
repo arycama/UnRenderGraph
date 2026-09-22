@@ -8,16 +8,18 @@ public readonly struct RenderTargetDescriptor
 {
 	public readonly ViewHandle viewHandle;
 	public readonly GraphicsFormat format;
+	public readonly bool hasMips;
 	public readonly bool clear;
 	public readonly Color clearColor;
 	public readonly float clearDepth;
 	public readonly uint clearStencil;
 	public readonly TextureDimension dimension;
 
-	public RenderTargetDescriptor(ViewHandle viewHandle, GraphicsFormat format, bool clear = false, Color clearColor = default, float clearDepth = 1f, uint clearStencil = default, TextureDimension dimension = TextureDimension.Tex2D)
+	public RenderTargetDescriptor(ViewHandle viewHandle, GraphicsFormat format, bool clear = false, Color clearColor = default, float clearDepth = 1f, uint clearStencil = default, TextureDimension dimension = TextureDimension.Tex2D, bool hasMips = false)
 	{
 		this.viewHandle = viewHandle;
 		this.format = format;
+		this.hasMips = hasMips;
 		this.clear = clear;
 		this.clearColor = clearColor;
 		this.clearDepth = clearDepth;
@@ -27,7 +29,7 @@ public readonly struct RenderTargetDescriptor
 
 	public override string ToString()
 	{
-		return $"{viewHandle} {format}, clear: ({clear}, color: {clearColor}, depth: {clearDepth}, stencil {clearStencil})";
+		return $"{viewHandle} {format} mips:{hasMips}, clear:({clear}, color:{clearColor}, depth:{clearDepth}, stencil:{clearStencil})";
 	}
 
 	public RenderTextureDescriptor GetRenderTextureDescriptor(ViewInfo viewInfo, int samples = 1, bool isUav = false)
@@ -38,9 +40,10 @@ public readonly struct RenderTargetDescriptor
 			width = viewInfo.size.x,
 			height = viewInfo.size.y,
 			volumeDepth = viewInfo.volumeDepth,
-			mipCount = 1,
+			mipCount = -1,
 			dimension = dimension,
 			shadowSamplingMode = ShadowSamplingMode.None,
+			useMipMap = hasMips
 		};
 
 		bool isDepth = false, isStencil = false;
