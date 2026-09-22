@@ -6,10 +6,9 @@ using Object = UnityEngine.Object;
 
 public class RenderTargetSystem : IDisposable
 {
-	private readonly List<RenderTargetIdentifier> renderTargets = new();
+	private readonly List<RenderTargetIdentifier> exportedRenderTargets = new();
 	private readonly List<RenderTexture> resources = new();
 	private readonly List<int> availableResources = new();
-	private readonly List<int> resourceIndices = new();
 
 	public void Dispose()
 	{
@@ -26,17 +25,15 @@ public class RenderTargetSystem : IDisposable
 		}
 	}
 
-	public RenderTargetIdentifier GetTexture(int index)
+	public RenderTargetIdentifier GetTexture(int index, bool isExternal)
 	{
-		return renderTargets[index];
+		return isExternal ? exportedRenderTargets[index] : resources[index];
 	}
-
 
 	public int ExportTarget(RenderTargetIdentifier id)
 	{
-		var index = renderTargets.Count;
-		renderTargets.Add(id);
-		resourceIndices.Add(-1);
+		var index = exportedRenderTargets.Count;
+		exportedRenderTargets.Add(id);
 		return index;
 	}
 
@@ -44,8 +41,6 @@ public class RenderTargetSystem : IDisposable
 	{
 		var rtDescriptor = descriptor.GetRenderTextureDescriptor(viewInfo, samples, isUav);
 
-		var resourceIndex = -1;
-		RenderTexture resource = null;
 		for (var i = 0; i < availableResources.Count; i++)
 		{
 			var targetIndex = availableResources[i];
@@ -63,34 +58,24 @@ public class RenderTargetSystem : IDisposable
 			if (target.enableRandomWrite != rtDescriptor.enableRandomWrite || target.antiAliasing != rtDescriptor.msaaSamples || target.bindTextureMS != rtDescriptor.bindMS)
 				continue;
 
-			resource = target;
-			resourceIndex = targetIndex;
 			availableResources.RemoveAt(i);
-			break;
+			return targetIndex;
 		}
 
-		if (resource == null)
-		{
-			resource = new RenderTexture(rtDescriptor) { hideFlags = HideFlags.HideAndDontSave, name = $"{resources.Count} {rtDescriptor.width}x{rtDescriptor.height}x{rtDescriptor.volumeDepth} {descriptor.format} {descriptor.dimension} aa:{rtDescriptor.msaaSamples}" };
-			_ = resource.Create();
-			resourceIndex = resources.Count;
-			resources.Add(resource);
-		}
-
-		var index = renderTargets.Count;
-		renderTargets.Add(resource);
-		resourceIndices.Add(resourceIndex);
-		return index;
+		var resource = new RenderTexture(rtDescriptor) { hideFlags = HideFlags.HideAndDontSave, name = $"{resources.Count} {rtDescriptor.width}x{rtDescriptor.height}x{rtDescriptor.volumeDepth} {descriptor.format} {descriptor.dimension} aa:{rtDescriptor.msaaSamples}" };
+		_ = resource.Create();
+		var resourceIndex = resources.Count;
+		resources.Add(resource);
+		return resourceIndex;
 	}
 
 	public void ReleaseResource(int resourceIndex)
 	{
-		availableResources.Add(resourceIndices[resourceIndex]);
+		availableResources.Add(resourceIndex);
 	}
 
 	public void FreeUnreleasedResources()
 	{
-		renderTargets.Clear();
-		resourceIndices.Clear();
+		exportedRenderTargets.Clear();
 	}
 }

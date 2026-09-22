@@ -21,7 +21,8 @@ public class RenderGraph : IDisposable
 	private readonly List<ViewInfo> viewInfos = new();
 	private readonly ResizableArray<ResourceHandle> handles = new();
 	private readonly ResizableArray<ResourceInfo> resourceInfo = new();
-	private readonly ResizableArray<ResourceInfo> persistentResourceInfo = new();
+	private readonly FreeList<ResourceInfo> persistentResourceInfo = new();
+	private readonly List<int> persistentResourcesToFree = new();
 	private readonly List<BufferDescriptor> bufferDescriptors = new();
 	private readonly BufferSystem bufferSystem = new();
 	private readonly RenderTargetSystem renderTargetSystem = new();
@@ -72,17 +73,17 @@ public class RenderGraph : IDisposable
 		return ref handle.isPersistent ? ref persistentResourceInfo[handle] : ref resourceInfo[handle];
 	}
 
-	public void ReleasePersistentResource(BufferHandle handle, int passIndex)
+	public void ReleasePersistentResource(ResourceHandle handle)
 	{
-		// TODO: Implement
-		//ref var target = ref resourceInfo[handle];
-		//target.lastReadIndex = passIndex;
+		ref var resourceInfo = ref persistentResourceInfo[handle];
+		resourceInfo.isPersistent = false;
+		persistentResourcesToFree.Add(handle.index);
 	}
 
 	public RenderTargetIdentifier GetTextureResource(RenderTargetHandle handle)
 	{
 		var target = GetResource(handle);
-		return renderTargetSystem.GetTexture(target.resourceIndex);
+		return renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal);
 	}
 
 	public GraphicsBuffer GetBufferResource(BufferHandle handle)
@@ -226,8 +227,7 @@ public class RenderGraph : IDisposable
 		int index;
 		if (isPersistent)
 		{
-			index = persistentResourceInfo.Count;
-			persistentResourceInfo.Add(info);
+			index = persistentResourceInfo.Add(info);
 		}
 		else
 		{
@@ -299,6 +299,24 @@ public class RenderGraph : IDisposable
 		return constantBufferBuilder;
 	}
 
+	private void FillConstantBuffers(CommandBuffer command)
+	{
+		foreach (var (handle, range) in constantBufferRanges)
+		{
+			// Don't allocate+fill buffers that are never read
+			ref var target = ref GetResource(handle);
+			if (target.lastReadIndex == -1)
+				continue;
+
+			var descriptor = bufferDescriptors[target.descriptorIndex];
+			target.resourceIndex = bufferSystem.AllocateBuffer(descriptor);
+
+			var data = constantBufferData.AsSpan(range);
+			var buffer = GetBufferResource(handle);
+			command.SetBufferData(buffer, data.AsArray());
+		}
+	}
+
 	private void BeginNativeRenderPass(CommandBuffer command, int renderPassIndex, IRenderPass renderPass)
 	{
 		var nativePassDesc = nativeRenderPassSystem.GetDescriptor(renderPass.NativePassIndex);
@@ -335,7 +353,7 @@ public class RenderGraph : IDisposable
 			else
 			{
 				// If this target has been written previously, it must be loaded
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
 
 			var isColor = descriptor.format switch
@@ -358,7 +376,7 @@ public class RenderGraph : IDisposable
 				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, descriptor);
 
-				attachmentDesc.resolveTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.resolveTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 				attachmentDesc.storeAction = RenderBufferStoreAction.Resolve;
 			}
 			else if (requiresMsaaStore)
@@ -367,7 +385,7 @@ public class RenderGraph : IDisposable
 				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, descriptor, false, viewInfo.samples);
 
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
 			else if (requiresStore)
 			{
@@ -375,7 +393,7 @@ public class RenderGraph : IDisposable
 				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, descriptor, false, 1);
 
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
 			else
 			{
@@ -424,39 +442,25 @@ public class RenderGraph : IDisposable
 	{
 		nativeRenderPassSystem.CloseIfNeeded(renderPasses.Count);
 
-		// Fill constant buffers
-		foreach (var (handle, range) in constantBufferRanges)
-		{
-			// Don't allocate+fill buffers that are never read
-			ref var target = ref GetResource(handle);
-			if (target.lastReadIndex == -1)
-				continue;
+		FillConstantBuffers(command);
 
-			var descriptor = bufferDescriptors[target.descriptorIndex];
-			target.resourceIndex = bufferSystem.AllocateBuffer(descriptor);
-
-			var data = constantBufferData.AsSpan(range);
-			var buffer = GetBufferResource(handle);
-			command.SetBufferData(buffer, data.AsArray());
-		}
-
-		var lastNativePass = -1;
+		var currentNativePass = -1;
 		for (var i = 0; i < renderPasses.Count; i++)
 		{
 			var renderPass = renderPasses[i];
-			if (renderPass.NativePassIndex != lastNativePass)
+			if (renderPass.NativePassIndex != currentNativePass)
 			{
 				// End current pass if needed
-				if (lastNativePass != -1)
+				if (currentNativePass != -1)
 				{
-					EndNativeRenderPass(command, lastNativePass, i - 1);
-					lastNativePass = -1;
+					EndNativeRenderPass(command, currentNativePass, i - 1);
+					currentNativePass = -1;
 				}
 
 				if (renderPass.NativePassIndex > -1)
 				{
 					BeginNativeRenderPass(command, i, renderPass);
-					lastNativePass = renderPass.NativePassIndex;
+					currentNativePass = renderPass.NativePassIndex;
 				}
 			}
 			else if (renderPass.IsNewSubPass)
@@ -466,7 +470,6 @@ public class RenderGraph : IDisposable
 			foreach (var handle in handles[renderPass.UavResourceRange])
 			{
 				ref var target = ref GetResource(handle);
-				var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start.Value];
 
 				// If this is the first time it is written, we need to allocate a texture
 				if (target.resourceIndex == -1)
@@ -483,7 +486,7 @@ public class RenderGraph : IDisposable
 
 				if (handle.type == ResourceHandleType.RenderTarget)
 				{
-					var resource = renderTargetSystem.GetTexture(target.resourceIndex);
+					var resource = renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal);
 					command.SetGlobalTexture(target.propertyId, resource);
 				}
 
@@ -501,7 +504,7 @@ public class RenderGraph : IDisposable
 
 				if (handle.type == ResourceHandleType.RenderTarget)
 				{
-					var resource = renderTargetSystem.GetTexture(target.resourceIndex);
+					var resource = renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal);
 					command.SetGlobalTexture(target.propertyId, resource);
 				}
 
@@ -549,28 +552,26 @@ public class RenderGraph : IDisposable
 			foreach (var keyword in renderPass.Keywords)
 				command.DisableKeyword(keyword);
 
-			// TODO: Can this be done in the above loop
 			// Free any UAVs. This needs to be done after the pass, otherwise we might allocate and free a texture before the pass starts, allowing another UAV to be assigned to the same texture
 			foreach (var handle in handles[renderPass.UavResourceRange])
 			{
-				ref var target = ref GetResource(handle);
-
 				// If this is the last time a resource is read, it can be freed for the next pass
-				if (i == target.lastReadIndex && !target.isExternal && !target.isPersistent)
-				{
-					if (handle.type == ResourceHandleType.RenderTarget)
-						renderTargetSystem.ReleaseResource(target.resourceIndex);
+				ref var target = ref GetResource(handle);
+				if (i != target.lastReadIndex || target.isExternal || target.isPersistent)
+					continue;
 
-					if (handle.type == ResourceHandleType.Buffer)
-						bufferSystem.ReleaseResource(target.resourceIndex);
+				if (handle.type == ResourceHandleType.RenderTarget)
+					renderTargetSystem.ReleaseResource(target.resourceIndex);
 
-					target.resourceIndex = -1;
-				}
+				if (handle.type == ResourceHandleType.Buffer)
+					bufferSystem.ReleaseResource(target.resourceIndex);
+
+				target.resourceIndex = -1;
 			}
 		}
 
-		if (lastNativePass != -1)
-			EndNativeRenderPass(command, lastNativePass, renderPasses.Count - 1);
+		if (currentNativePass != -1)
+			EndNativeRenderPass(command, currentNativePass, renderPasses.Count - 1);
 
 		FrameIndex++;
 	}
@@ -591,5 +592,18 @@ public class RenderGraph : IDisposable
 		bufferDescriptors.Clear();
 		renderTargetDescriptors.Clear();
 		renderTargetSystem.FreeUnreleasedResources();
+
+		foreach(var index in persistentResourcesToFree)
+			persistentResourceInfo.Free(index);
+
+		persistentResourcesToFree.Clear();
+
+		// Need to reset some things
+		for(var i = 0; i < persistentResourceInfo.Count; i++)
+		{
+			ref var info = ref persistentResourceInfo[i];
+			info.lastReadIndex = -1;
+			info.lastWriteIndex = -1;
+		}
 	}
 }

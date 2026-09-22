@@ -119,6 +119,11 @@ public class PassBuilder : IDisposable
 			AddKeyword(keyword);
 	}
 
+	public void ReleasePersistentResource(ResourceHandle resource)
+	{
+		RenderGraph.ReleasePersistentResource(resource);
+	}
+
 	public void SetRenderFunction<T>(T data, Action<CommandBuffer, T> render) => RenderPass = new RenderPass<T>(data, render);
 
 	public void Dispose()

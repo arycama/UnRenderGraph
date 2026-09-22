@@ -14,8 +14,6 @@ public class BufferSystem : IDisposable
 
 	public int AllocateBuffer(BufferDescriptor descriptor)
 	{
-		var resourceIndex = -1;
-		GraphicsBuffer resource = null;
 		for (var i = 0; i < availableIndices.Count; i++)
 		{
 			var bufferIndex = availableIndices[i];
@@ -32,19 +30,14 @@ public class BufferSystem : IDisposable
 			if (buffer.usageFlags != descriptor.usageFlags)
 				continue;
 
-			resource = buffer;
-			resourceIndex = bufferIndex;
 			availableIndices.RemoveAt(i);
-			break;
+			return bufferIndex;
 		}
 
-		if (resource == null)
-		{
-			resourceIndex = resources.Count;
-			resource = new GraphicsBuffer(descriptor.target, descriptor.usageFlags, descriptor.count, descriptor.stride) { name = $"{resourceIndex} {descriptor.stride}x{descriptor.count} {descriptor.target} {descriptor.usageFlags}" };
-			resources.Add(resource);
-		}
-
+		var resourceIndex = resources.Count;
+		var name = $"{resourceIndex} {descriptor.stride}x{descriptor.count} {descriptor.target} {descriptor.usageFlags}";
+		var resource = new GraphicsBuffer(descriptor.target, descriptor.usageFlags, descriptor.count, descriptor.stride) { name = name };
+		resources.Add(resource);
 		return resourceIndex;
 	}
 

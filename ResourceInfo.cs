@@ -10,9 +10,9 @@ public struct ResourceInfo
 	public readonly Range firstWriteIndexRange;
 	public int lastWriteIndex;
 	public int lastReadIndex;
-	public readonly int propertyId;
+	public int propertyId;
 	public readonly ResourceHandleType type;
-	public readonly bool isPersistent;
+	public bool isPersistent;
 
 	public ResourceInfo(int descriptorIndex, int propertyId, Range firstWriteIndexRange, ResourceHandleType type, bool isPersistent)
 	{
