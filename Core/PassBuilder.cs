@@ -11,11 +11,11 @@ public class PassBuilder : IDisposable
 	public ViewHandle ViewHandle { get; set; } = new(-1);
 	public IRenderPass RenderPass { get; private set; }
 	public List<ResourceHandle> Resources { get; } = new();
-	public List<RenderTargetHandle> Inputs { get; } = new();
-	public List<RenderTargetHandle> Outputs { get; } = new();
+	public List<RtHandle> Inputs { get; } = new();
+	public List<RtHandle> Outputs { get; } = new();
 	public List<ResourceHandle> UavOutputs { get; } = new();
 	public List<GlobalKeyword> Keywords { get; } = new();
-	public RenderTargetHandle DepthStencil { get; set; } = new(-1, default, false);
+	public RtHandle DepthStencil { get; set; } = new(-1, default, false);
 	public int DepthSlice { get; set; } = -1;
 	public int VolumeDepth { get; set; } = 1;
 
@@ -89,9 +89,9 @@ public class PassBuilder : IDisposable
 			AddResource(resource);
 	}
 
-	public void AddOutput(RenderTargetHandle output) => Outputs.Add(output);
+	public void AddOutput(RtHandle output) => Outputs.Add(output);
 
-	public void AddOutputs(ReadOnlySpan<RenderTargetHandle> outputs)
+	public void AddOutputs(ReadOnlySpan<RtHandle> outputs)
 	{
 		foreach (var output in outputs)
 			AddOutput(output);
@@ -105,9 +105,9 @@ public class PassBuilder : IDisposable
 			AddUavOutput(output);
 	}
 
-	public void AddInput(RenderTargetHandle input) => Inputs.Add(input);
+	public void AddInput(RtHandle input) => Inputs.Add(input);
 
-	public void AddInputs(ReadOnlySpan<RenderTargetHandle> inputs)
+	public void AddInputs(ReadOnlySpan<RtHandle> inputs)
 	{
 		foreach (var input in inputs)
 			AddInput(input);

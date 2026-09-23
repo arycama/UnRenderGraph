@@ -6,13 +6,13 @@ using static Unmath.Math;
 
 public class NativeRenderPassSystem
 {
-	private readonly ResizableArray<RenderTargetHandle> attachments = new();
-	private readonly ResizableArray<RenderTargetHandle> outputs = new();
-	private readonly ResizableArray<RenderTargetHandle> inputs = new();
-	private readonly ResizableArray<RenderTargetHandle> attachmentDescriptors = new();
+	private readonly ResizableArray<RtHandle> attachments = new();
+	private readonly ResizableArray<RtHandle> outputs = new();
+	private readonly ResizableArray<RtHandle> inputs = new();
+	private readonly ResizableArray<RtHandle> attachmentDescriptors = new();
 	private readonly ResizableArray<SubPassDescriptor> subPassDescriptors = new();
 
-	private RenderTargetHandle? depthStencil;
+	private RtHandle? depthStencil;
 	private SubPassFlags flags;
 	private int depthSlice = -1;
 	private int volumeDepth = 1;
@@ -31,7 +31,7 @@ public class NativeRenderPassSystem
 		subPassStartIndex = 0;
 	}
 
-	public Span<RenderTargetHandle> GetAttachments(Range range)
+	public Span<RtHandle> GetAttachments(Range range)
 	{
 		return attachmentDescriptors.AsSpan(range);
 	}

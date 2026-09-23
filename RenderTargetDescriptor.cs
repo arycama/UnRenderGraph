@@ -43,7 +43,8 @@ public readonly struct RenderTargetDescriptor
 			mipCount = -1,
 			dimension = dimension,
 			shadowSamplingMode = ShadowSamplingMode.None,
-			useMipMap = hasMips
+			useMipMap = hasMips,
+			autoGenerateMips = true
 		};
 
 		bool isDepth = false, isStencil = false;

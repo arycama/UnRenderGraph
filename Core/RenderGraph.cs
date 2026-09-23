@@ -53,7 +53,7 @@ public class RenderGraph : IDisposable
 		resourceMap.Clear();
 	}
 
-	public RenderTargetHandle GetTexture(RenderTargetDescriptor descriptor, int propertyId, bool isPersistent = false)
+	public RtHandle GetTexture(RenderTargetDescriptor descriptor, int propertyId, bool isPersistent = false)
 	{
 		int descriptorIndex;
 		if (isPersistent)
@@ -91,7 +91,7 @@ public class RenderGraph : IDisposable
 		persistentDescriptorsToFree.Add(resourceInfo.descriptorIndex);
 	}
 
-	public RenderTargetIdentifier GetTextureResource(RenderTargetHandle handle)
+	public RenderTargetIdentifier GetTextureResource(RtHandle handle)
 	{
 		var target = GetResource(handle);
 		return renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal);
@@ -249,7 +249,7 @@ public class RenderGraph : IDisposable
 		return index;
 	}
 
-	public void ExportTexture(RenderTargetHandle handle, RenderTargetIdentifier id)
+	public void ExportTexture(RtHandle handle, RenderTargetIdentifier id)
 	{
 		var resourceIndex = renderTargetSystem.ExportTarget(id);
 		ref var target = ref GetResource(handle);
@@ -341,10 +341,7 @@ public class RenderGraph : IDisposable
 		{
 			ref var target = ref GetResource(texture);
 			var descriptor = texture.isPersistent ? persistentRenderTargetDescriptors[target.descriptorIndex] : renderTargetDescriptors[target.descriptorIndex];
-			var attachmentDesc = new AttachmentDescriptor
-			{
-				graphicsFormat = descriptor.format,
-			};
+			var attachmentDesc = new AttachmentDescriptor { graphicsFormat = descriptor.format };
 
 			// Load the target if it has been written to before this renderpass, otherwise clear it if required
 			var firstWriteIndex = firstWriteIndices[target.firstWriteIndexRange.Start.Value + Max(0, nativePassDesc.depthSlice)];
@@ -517,8 +514,6 @@ public class RenderGraph : IDisposable
 
 					if (handle.type == ResourceHandleType.Buffer)
 						bufferSystem.ReleaseResource(target.resourceIndex);
-
-					//target.resourceIndex = -1;
 				}
 			}
 
@@ -579,8 +574,6 @@ public class RenderGraph : IDisposable
 
 				if (handle.type == ResourceHandleType.Buffer)
 					bufferSystem.ReleaseResource(target.resourceIndex);
-
-				//target.resourceIndex = -1;
 			}
 		}
 
