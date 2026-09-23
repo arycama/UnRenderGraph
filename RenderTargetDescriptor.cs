@@ -14,8 +14,9 @@ public readonly struct RenderTargetDescriptor
 	public readonly float clearDepth;
 	public readonly uint clearStencil;
 	public readonly TextureDimension dimension;
+	public readonly bool autoGenerateMips;
 
-	public RenderTargetDescriptor(ViewHandle viewHandle, GraphicsFormat format, bool clear = false, Color clearColor = default, float clearDepth = 1f, uint clearStencil = default, TextureDimension dimension = TextureDimension.Tex2D, bool hasMips = false)
+	public RenderTargetDescriptor(ViewHandle viewHandle, GraphicsFormat format, bool clear = false, Color clearColor = default, float clearDepth = 1f, uint clearStencil = default, TextureDimension dimension = TextureDimension.Tex2D, bool hasMips = false, bool autoGenerateMips = false)
 	{
 		this.viewHandle = viewHandle;
 		this.format = format;
@@ -25,6 +26,7 @@ public readonly struct RenderTargetDescriptor
 		this.clearDepth = clearDepth;
 		this.clearStencil = clearStencil;
 		this.dimension = dimension;
+		this.autoGenerateMips = autoGenerateMips;
 	}
 
 	public override string ToString()
@@ -44,7 +46,7 @@ public readonly struct RenderTargetDescriptor
 			dimension = dimension,
 			shadowSamplingMode = ShadowSamplingMode.None,
 			useMipMap = hasMips,
-			autoGenerateMips = true
+			autoGenerateMips = autoGenerateMips
 		};
 
 		bool isDepth = false, isStencil = false;

@@ -16,6 +16,7 @@ public class NativeRenderPassSystem
 	private SubPassFlags flags;
 	private int depthSlice = -1;
 	private int volumeDepth = 1;
+	private int mipLevel = 0;
 	private int subPassStartIndex;
 
 	private readonly StringBuilder passNameBuilder = new();
@@ -99,12 +100,13 @@ public class NativeRenderPassSystem
 		var subPassRange = subPassStartIndex..subPassDescriptors.Count;
 		subPassStartIndex = subPassDescriptors.Count;
 
-		nativePassDescriptors.Add(new(attachmentRange, subPassRange, depthStencilAttachmentIndex, passEndIndex, depthSlice, volumeDepth, passNameBuilder.ToString()));
+		nativePassDescriptors.Add(new(attachmentRange, subPassRange, depthStencilAttachmentIndex, passEndIndex, depthSlice, volumeDepth, mipLevel, passNameBuilder.ToString()));
 		attachments.Clear();
 		_ = passNameBuilder.Clear();
 		depthStencil = default;
 		depthSlice = -1;
 		volumeDepth = 1;
+		mipLevel = 0;
 	}
 
 	public void CloseIfNeeded(int index)
@@ -121,7 +123,7 @@ public class NativeRenderPassSystem
 	{
 		var isNativePass = builder.Outputs.Count > 0 || builder.DepthStencil.index != -1;
 		var subPassCount = subPassDescriptors.Count - subPassStartIndex;
-		var canMergeWithExistingPass = isNativePass && subPassCount < 8 && builder.DepthSlice == depthSlice && builder.VolumeDepth == volumeDepth;
+		var canMergeWithExistingPass = isNativePass && subPassCount < 8 && builder.DepthSlice == depthSlice && builder.VolumeDepth == volumeDepth && builder.MipLevel == mipLevel;
 
 		// If depth stencil is set, we can only merge if it is equal
 		if (depthStencil.HasValue && builder.DepthStencil.index != -1 && builder.DepthStencil != depthStencil.Value)
@@ -206,6 +208,7 @@ public class NativeRenderPassSystem
 				// Start new subpass
 				depthSlice = builder.DepthSlice;
 				volumeDepth = builder.VolumeDepth;
+				mipLevel = builder.MipLevel;
 
 				// Depth Stencil (TODO: This is unneccessarily repeated for non-first passes)
 				if (builder.DepthStencil.index != -1)

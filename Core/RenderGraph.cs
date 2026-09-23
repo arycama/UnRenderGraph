@@ -361,7 +361,7 @@ public class RenderGraph : IDisposable
 			else
 			{
 				// If this target has been written previously, it must be loaded
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
 
 			var isColor = descriptor.format switch
@@ -384,7 +384,7 @@ public class RenderGraph : IDisposable
 				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, descriptor);
 
-				attachmentDesc.resolveTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.resolveTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 				attachmentDesc.storeAction = RenderBufferStoreAction.Resolve;
 			}
 			else if (requiresMsaaStore)
@@ -393,7 +393,7 @@ public class RenderGraph : IDisposable
 				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, descriptor, false, viewInfo.samples);
 
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
 			else if (requiresStore)
 			{
@@ -401,7 +401,7 @@ public class RenderGraph : IDisposable
 				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, descriptor, false, 1);
 
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), 0, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
 			}
 			else
 			{
@@ -416,6 +416,18 @@ public class RenderGraph : IDisposable
 
 		var subPasses = nativeRenderPassSystem.GetSubPassDescriptors(nativePassDesc.subpasses);
 		command.BeginRenderPass(viewInfo.size.x, viewInfo.size.y, nativePassDesc.volumeDepth, viewInfo.samples, attachmendIndices.Span.AsArray(), nativePassDesc.depthIndex, -1, subPasses.AsArray(), debugNameUtf8);
+
+		// We disable Unity's annoying internal Y flip, but it will still attempt to flip any viewports we set, so we need to negate the viewport to undo Unity's negation
+		// However if the target is only a depth buffer, Unity will not flip it
+		if (nativePassDesc.mipLevel != 0)
+		{
+			var viewport = new Rect(0, 0, viewInfo.size.x >> nativePassDesc.mipLevel, viewInfo.size.y >> nativePassDesc.mipLevel);
+
+			if (attachmendIndices.Count != 1 || nativePassDesc.depthIndex == -1)
+				viewport.y = viewInfo.size.y - viewport.size.y;
+
+			command.SetViewport(viewport);
+		}
 	}
 
 	private void EndNativeRenderPass(CommandBuffer command, int lastNativePass, int passIndex)

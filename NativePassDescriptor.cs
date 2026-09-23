@@ -9,8 +9,9 @@ public readonly struct NativePassDescriptor
 	public readonly string debugName;
 	public readonly int depthSlice;
 	public readonly int volumeDepth;
+	public readonly int mipLevel;
 
-	public NativePassDescriptor(Range attachments, Range subpasses, int depthIndex, int passEndIndex, int depthSlice, int volumeDepth, string debugName)
+	public NativePassDescriptor(Range attachments, Range subpasses, int depthIndex, int passEndIndex, int depthSlice, int volumeDepth, int mipLevel, string debugName)
 	{
 		this.attachments = attachments;
 		this.subpasses = subpasses;
@@ -18,6 +19,7 @@ public readonly struct NativePassDescriptor
 		this.passEndIndex = passEndIndex;
 		this.depthSlice = depthSlice;
 		this.volumeDepth = volumeDepth;
+		this.mipLevel = mipLevel;
 		this.debugName = debugName;
 	}
 }
