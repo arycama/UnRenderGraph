@@ -17,7 +17,6 @@ public class PassBuilder : IDisposable
 	public List<GlobalKeyword> Keywords { get; } = new();
 	public RtHandle DepthStencil { get; set; } = new(-1, default, false);
 	public int DepthSlice { get; set; } = -1;
-	public int VolumeDepth { get; set; } = 1;
 	public int MipLevel { get; set; } = 0;
 
 	public PassBuilder(RenderGraph renderGraph)
@@ -138,7 +137,6 @@ public class PassBuilder : IDisposable
 		Index = -1;
 		DepthSlice = -1;
 		MipLevel = 0;
-		VolumeDepth = 1;
 		DepthStencil = new(-1, default, false);
 		RenderPass = null;
 		Resources.Clear();

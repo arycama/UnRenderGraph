@@ -123,7 +123,14 @@ public class NativeRenderPassSystem
 	{
 		var isNativePass = builder.Outputs.Count > 0 || builder.DepthStencil.index != -1;
 		var subPassCount = subPassDescriptors.Count - subPassStartIndex;
-		var canMergeWithExistingPass = isNativePass && subPassCount < 8 && builder.DepthSlice == depthSlice && builder.VolumeDepth == volumeDepth && builder.MipLevel == mipLevel;
+		var canMergeWithExistingPass = isNativePass && subPassCount < 8 && builder.DepthSlice == depthSlice && builder.MipLevel == mipLevel;
+
+		if (canMergeWithExistingPass)
+		{
+			var builderView = builder.RenderGraph.GetViewInfo(builder.ViewHandle);
+			if (builderView.volumeDepth != volumeDepth)
+				canMergeWithExistingPass = false;
+		}
 
 		// If depth stencil is set, we can only merge if it is equal
 		if (depthStencil.HasValue && builder.DepthStencil.index != -1 && builder.DepthStencil != depthStencil.Value)
@@ -224,7 +231,7 @@ public class NativeRenderPassSystem
 
 				// Start new subpass
 				depthSlice = builder.DepthSlice;
-				volumeDepth = builder.VolumeDepth;
+				volumeDepth = builder.RenderGraph.GetViewInfo(builder.ViewHandle).volumeDepth;
 				mipLevel = builder.MipLevel;
 
 				// Depth Stencil (TODO: This is unneccessarily repeated for non-first passes)

@@ -361,7 +361,7 @@ public class RenderGraph : IDisposable
 			else
 			{
 				// If this target has been written previously, it must be loaded
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, nativePassDesc.depthSlice);
 			}
 
 			var isColor = descriptor.format switch
@@ -384,7 +384,7 @@ public class RenderGraph : IDisposable
 				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, descriptor);
 
-				attachmentDesc.resolveTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.resolveTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, nativePassDesc.depthSlice);
 				attachmentDesc.storeAction = RenderBufferStoreAction.Resolve;
 			}
 			else if (requiresMsaaStore)
@@ -393,7 +393,7 @@ public class RenderGraph : IDisposable
 				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, descriptor, false, viewInfo.samples);
 
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, nativePassDesc.depthSlice);
 			}
 			else if (requiresStore)
 			{
@@ -401,7 +401,7 @@ public class RenderGraph : IDisposable
 				if (target.resourceIndex == -1)
 					AllocateTexture(texture, viewHandle, descriptor, false, 1);
 
-				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, Max(0, nativePassDesc.depthSlice));
+				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, nativePassDesc.depthSlice);
 			}
 			else
 			{
