@@ -99,6 +99,7 @@ public class PassBuilder : IDisposable
 	}
 
 	public void AddUavOutput(ResourceHandle output) => UavOutputs.Add(output);
+	public void AddUavOutput(ResourceHandle output, int propertyId) => UavOutputs.Add(new(output.index, output.type, propertyId, output.isPersistent));
 
 	public void AddUavOutputs(ReadOnlySpan<ResourceHandle> outputs)
 	{
