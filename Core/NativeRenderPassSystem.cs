@@ -176,6 +176,23 @@ public class NativeRenderPassSystem
 				// Check outputs
 				if (canMergeSubPass)
 				{
+					// Also need to check if any of the inputs are the current depthStencil, in which case the current pass needs to use readonly depthStencil
+					if (depthStencil.HasValue)
+					{
+						var readsDepthStencil = false;
+						for (var i = 0; i < builder.Inputs.Count; i++)
+						{
+							if (builder.Inputs[i] != depthStencil.Value)
+								continue;
+
+							readsDepthStencil = true;
+							break;
+						}
+
+						if (readsDepthStencil && flags != SubPassFlags.ReadOnlyDepth)
+							canMergeSubPass = false;
+					}
+
 					if (builder.Outputs.Count != outputs.Count)
 						canMergeSubPass = false;
 					else
