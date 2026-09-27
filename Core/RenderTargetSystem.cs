@@ -37,7 +37,7 @@ public class RenderTargetSystem : IDisposable
 		return index;
 	}
 
-	public int AllocateTarget(RenderTargetDescriptor descriptor, ViewInfo viewInfo, int samples, bool isUav)
+	public int AllocateTarget(RtDescriptor descriptor, ViewInfo viewInfo, int samples, bool isUav)
 	{
 		var rtDescriptor = descriptor.GetRenderTextureDescriptor(viewInfo, samples, isUav);
 

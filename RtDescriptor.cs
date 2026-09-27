@@ -4,7 +4,7 @@ using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 
 [DebuggerDisplay("{viewHandle} {format}, clear: ({clear}, color: {clearColor}, depth: {clearDepth}, stencil {clearStencil})")]
-public readonly struct RenderTargetDescriptor
+public readonly struct RtDescriptor
 {
 	public readonly ViewHandle viewHandle;
 	public readonly GraphicsFormat format;
@@ -16,7 +16,7 @@ public readonly struct RenderTargetDescriptor
 	public readonly TextureDimension dimension;
 	public readonly bool autoGenerateMips;
 
-	public RenderTargetDescriptor(ViewHandle viewHandle, GraphicsFormat format, bool clear = false, Color clearColor = default, float clearDepth = 1f, uint clearStencil = default, TextureDimension dimension = TextureDimension.Tex2D, bool hasMips = false, bool autoGenerateMips = false)
+	public RtDescriptor(ViewHandle viewHandle, GraphicsFormat format, bool clear = false, Color clearColor = default, float clearDepth = 1f, uint clearStencil = default, TextureDimension dimension = TextureDimension.Tex2D, bool hasMips = false, bool autoGenerateMips = false)
 	{
 		this.viewHandle = viewHandle;
 		this.format = format;

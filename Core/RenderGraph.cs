@@ -26,8 +26,8 @@ public class RenderGraph : IDisposable
 	private readonly List<BufferDescriptor> bufferDescriptors = new();
 	private readonly BufferSystem bufferSystem = new();
 	private readonly RenderTargetSystem renderTargetSystem = new();
-	private readonly List<RenderTargetDescriptor> renderTargetDescriptors = new();
-	private readonly FreeList<RenderTargetDescriptor> persistentRenderTargetDescriptors = new();
+	private readonly List<RtDescriptor> renderTargetDescriptors = new();
+	private readonly FreeList<RtDescriptor> persistentRenderTargetDescriptors = new();
 	private readonly List<RayTracingAccelerationStructure> rayTracingAccelerationStructures = new();
 	private readonly List<Texture> textures = new();
 	private readonly ConstantBufferBuilder constantBufferBuilder;
@@ -53,7 +53,7 @@ public class RenderGraph : IDisposable
 		resourceMap.Clear();
 	}
 
-	public RtHandle GetTexture(RenderTargetDescriptor descriptor, int propertyId, bool isPersistent = false)
+	public RtHandle GetTexture(RtDescriptor descriptor, int propertyId, bool isPersistent = false)
 	{
 		int descriptorIndex;
 		if (isPersistent)
@@ -288,7 +288,7 @@ public class RenderGraph : IDisposable
 		return new(index);
 	}
 
-	private void AllocateTexture(ResourceHandle handle, ViewHandle viewHandle, RenderTargetDescriptor descriptor, bool isUav = false, int samples = 1)
+	private void AllocateTexture(ResourceHandle handle, ViewHandle viewHandle, RtDescriptor descriptor, bool isUav = false, int samples = 1)
 	{
 		ref var target = ref GetResource(handle);
 		target.resourceIndex = renderTargetSystem.AllocateTarget(descriptor, viewInfos[viewHandle.index], samples, isUav);
