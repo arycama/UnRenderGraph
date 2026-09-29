@@ -1,4 +1,5 @@
 using System;
+using Unmath;
 
 public readonly struct NativePassDescriptor
 {
@@ -7,11 +8,13 @@ public readonly struct NativePassDescriptor
 	public readonly int depthIndex;
 	public readonly int passEndIndex;
 	public readonly string debugName;
-	public readonly int depthSlice;
+	public readonly Int2 size;
 	public readonly int volumeDepth;
+	public readonly int samples;
+	public readonly int depthSlice;
 	public readonly int mipLevel;
 
-	public NativePassDescriptor(Range attachments, Range subpasses, int depthIndex, int passEndIndex, int depthSlice, int volumeDepth, int mipLevel, string debugName)
+	public NativePassDescriptor(Range attachments, Range subpasses, int depthIndex, int passEndIndex, int depthSlice, int volumeDepth, int mipLevel, string debugName, Int2 size, int samples)
 	{
 		this.attachments = attachments;
 		this.subpasses = subpasses;
@@ -21,5 +24,7 @@ public readonly struct NativePassDescriptor
 		this.volumeDepth = volumeDepth;
 		this.mipLevel = mipLevel;
 		this.debugName = debugName;
+		this.size = size;
+		this.samples = samples;
 	}
 }

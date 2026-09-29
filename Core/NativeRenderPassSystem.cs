@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine.Rendering;
+using Unmath;
 using static Unmath.Math;
 
 public class NativeRenderPassSystem
@@ -14,7 +15,9 @@ public class NativeRenderPassSystem
 
 	private RtHandle? depthStencil;
 	private SubPassFlags flags;
+	private Int2 size = -1;
 	private int depthSlice = -1;
+	private int samples = 1;
 	private int volumeDepth = 1;
 	private int mipLevel = 0;
 	private int subPassStartIndex;
@@ -100,12 +103,14 @@ public class NativeRenderPassSystem
 		var subPassRange = subPassStartIndex..subPassDescriptors.Count;
 		subPassStartIndex = subPassDescriptors.Count;
 
-		nativePassDescriptors.Add(new(attachmentRange, subPassRange, depthStencilAttachmentIndex, passEndIndex, depthSlice, volumeDepth, mipLevel, passNameBuilder.ToString()));
+		nativePassDescriptors.Add(new(attachmentRange, subPassRange, depthStencilAttachmentIndex, passEndIndex, depthSlice, volumeDepth, mipLevel, passNameBuilder.ToString(), size, samples));
 		attachments.Clear();
 		_ = passNameBuilder.Clear();
 		depthStencil = default;
+		size = -1;
 		depthSlice = -1;
 		volumeDepth = 1;
+		samples = 1;
 		mipLevel = 0;
 	}
 
@@ -128,7 +133,7 @@ public class NativeRenderPassSystem
 		if (canMergeWithExistingPass)
 		{
 			var builderView = builder.RenderGraph.GetViewInfo(builder.ViewHandle);
-			if (builderView.volumeDepth != volumeDepth)
+			if (builderView.size != size || builderView.samples != samples || builderView.volumeDepth != volumeDepth)
 				canMergeWithExistingPass = false;
 		}
 
@@ -230,8 +235,11 @@ public class NativeRenderPassSystem
 				}
 
 				// Start new subpass
+				var builderView = builder.RenderGraph.GetViewInfo(builder.ViewHandle);
+				size = builderView.size;
+				samples = builderView.samples;
 				depthSlice = builder.DepthSlice;
-				volumeDepth = builder.RenderGraph.GetViewInfo(builder.ViewHandle).volumeDepth;
+				volumeDepth = builderView.volumeDepth;
 				mipLevel = builder.MipLevel;
 
 				// Depth Stencil (TODO: This is unneccessarily repeated for non-first passes)

@@ -332,7 +332,6 @@ public class RenderGraph : IDisposable
 	{
 		var nativePassDesc = nativeRenderPassSystem.GetDescriptor(renderPass.NativePassIndex);
 		var viewHandle = renderPass.ViewHandle;
-		var viewInfo = viewInfos[renderPass.ViewHandle.index];
 
 		// Resolve the attachments to their final values
 		var attachments = nativeRenderPassSystem.GetAttachments(nativePassDesc.attachments);
@@ -371,10 +370,10 @@ public class RenderGraph : IDisposable
 			};
 
 			// Resolve color if it's last write is within this pass
-			var requiresResolve = viewInfo.samples > 1 && isColor && target.lastWriteIndex <= nativePassDesc.passEndIndex && target.lastReadIndex > nativePassDesc.passEndIndex && target.lastReadIndex > nativePassDesc.passEndIndex;
+			var requiresResolve = nativePassDesc.samples > 1 && isColor && target.lastWriteIndex <= nativePassDesc.passEndIndex && target.lastReadIndex > nativePassDesc.passEndIndex && target.lastReadIndex > nativePassDesc.passEndIndex;
 
 			// Store the msaa surface if this is depth and read later, since depth surfaces can not be resolved. Also store msaa if this surface is written to again later
-			var requiresMsaaStore = viewInfo.samples > 1 && (!isColor && (target.lastWriteIndex <= nativePassDesc.passEndIndex || target.lastWriteIndex >= nativePassDesc.passEndIndex) || target.lastWriteIndex > nativePassDesc.passEndIndex) && target.lastReadIndex > nativePassDesc.passEndIndex;
+			var requiresMsaaStore = nativePassDesc.samples > 1 && (!isColor && (target.lastWriteIndex <= nativePassDesc.passEndIndex || target.lastWriteIndex >= nativePassDesc.passEndIndex) || target.lastWriteIndex > nativePassDesc.passEndIndex) && target.lastReadIndex > nativePassDesc.passEndIndex;
 
 			// Store the target if it is read outside of this renderpass, or if it is exported to an external resource
 			var requiresStore = target.lastReadIndex > nativePassDesc.passEndIndex || target.isExternal || target.isPersistent;
@@ -391,7 +390,7 @@ public class RenderGraph : IDisposable
 			{
 				// Depth targets can't be msaa resolved so we need to store the msaa version.
 				if (target.resourceIndex == -1)
-					AllocateTexture(texture, viewHandle, descriptor, false, viewInfo.samples);
+					AllocateTexture(texture, viewHandle, descriptor, false, nativePassDesc.samples);
 
 				attachmentDesc.loadStoreTarget = new(renderTargetSystem.GetTexture(target.resourceIndex, target.isExternal), nativePassDesc.mipLevel, CubemapFace.Unknown, nativePassDesc.depthSlice);
 			}
@@ -415,16 +414,16 @@ public class RenderGraph : IDisposable
 		_ = Encoding.UTF8.GetBytes(nativePassDesc.debugName, debugNameUtf8);
 
 		var subPasses = nativeRenderPassSystem.GetSubPassDescriptors(nativePassDesc.subpasses);
-		command.BeginRenderPass(viewInfo.size.x, viewInfo.size.y, nativePassDesc.volumeDepth, viewInfo.samples, attachmendIndices.Span.AsArray(), nativePassDesc.depthIndex, -1, subPasses.AsArray(), debugNameUtf8);
+		command.BeginRenderPass(nativePassDesc.size.x, nativePassDesc.size.y, nativePassDesc.volumeDepth, nativePassDesc.samples, attachmendIndices.Span.AsArray(), nativePassDesc.depthIndex, -1, subPasses.AsArray(), debugNameUtf8);
 
 		// We disable Unity's annoying internal Y flip, but it will still attempt to flip any viewports we set, so we need to negate the viewport to undo Unity's negation
 		// However if the target is only a depth buffer, Unity will not flip it
 		if (nativePassDesc.mipLevel != 0)
 		{
-			var viewport = new Rect(0, 0, viewInfo.size.x >> nativePassDesc.mipLevel, viewInfo.size.y >> nativePassDesc.mipLevel);
+			var viewport = new Rect(0, 0, nativePassDesc.size.x >> nativePassDesc.mipLevel, nativePassDesc.size.y >> nativePassDesc.mipLevel);
 
 			if (attachmendIndices.Count != 1 || nativePassDesc.depthIndex == -1)
-				viewport.y = viewInfo.size.y - viewport.size.y;
+				viewport.y = nativePassDesc.size.y - viewport.size.y;
 
 			command.SetViewport(viewport);
 		}
