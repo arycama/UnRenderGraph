@@ -115,7 +115,7 @@ public class RenderGraph : IDisposable
 
 	public bool TryGetResource(Type type, out IRenderResource resource) => resourceMap.TryGetResource(type, out resource);
 
-	public bool TryGetResource<T>(out T resource)
+	public bool TryGetResource<T>(out T resource) where T : IRenderResource
 	{
 		var hasResource = TryGetResource(typeof(T), out var temp);
 		resource = hasResource ? (T)temp : default;

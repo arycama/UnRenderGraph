@@ -31,11 +31,11 @@ public class PersistentRtHandleCache
 		this.autoGenerateMips = autoGenerateMips;
 	}
 
-	public (RtHandle current, RtHandle history, bool hasHistory) GetTextures(ViewHandle viewHandle, Camera camera, PassBuilder pass)
+	public (RtHandle current, RtHandle history, bool hasHistory) GetTextures(ViewHandle viewHandle, Camera camera)
 	{
 		var hasHistory = textureCache.TryGetValue(camera, out var history);
 		if (hasHistory)
-			pass.ReleasePersistentResource(history);
+			renderGraph.ReleasePersistentResource(history);
 
 		var current = renderGraph.GetTexture(new(viewHandle, format, clear, clearColor, clearDepth, clearStencil, dimension, hasMips, autoGenerateMips), propertyId, true);
 		textureCache[camera] = current;
