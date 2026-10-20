@@ -116,6 +116,12 @@ public class PassBuilder : IDisposable
 
 	public void AddKeyword(string keyword) => Keywords.Add(GlobalKeyword.Create(keyword));
 
+	public void AddKeyword(bool condition, string keyword)
+	{
+		if (condition)
+			AddKeyword(keyword);
+	}
+
 	public void AddKeywords(ReadOnlySpan<string> keywords)
 	{
 		foreach (var keyword in keywords)
