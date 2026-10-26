@@ -127,9 +127,9 @@ public class NativeRenderPassSystem
 	public (int nativePassIndex, bool isNewSubPass) AddRenderPass(PassBuilder builder)
 	{
 		var isNativePass = builder.Outputs.Count > 0 || builder.DepthStencil.index != -1;
-		var subPassCount = subPassDescriptors.Count - subPassStartIndex;
-		var canMergeWithExistingPass = isNativePass && subPassCount < 8 && builder.DepthSlice == depthSlice && builder.MipLevel == mipLevel;
 
+		// Check to see if this pass can be merged
+		var canMergeWithExistingPass = isNativePass && builder.DepthSlice == depthSlice && builder.MipLevel == mipLevel;
 		if (canMergeWithExistingPass)
 		{
 			var builderView = builder.RenderGraph.GetViewInfo(builder.ViewHandle);
@@ -166,11 +166,6 @@ public class NativeRenderPassSystem
 		var nativePassIndex = -1;
 		if (isNativePass) // TODO: Does it matter if we skip this check
 		{
-			nativePassIndex = nativePassDescriptors.Count;
-			if (passNameBuilder.Length > 0)
-				_ = passNameBuilder.Append(", ");
-			_ = passNameBuilder.Append(builder.Name);
-
 			// Check if we can merge with an existing subpass
 			var canMergeSubPass = canMergeWithExistingPass;
 			if (canMergeSubPass)
@@ -222,6 +217,25 @@ public class NativeRenderPassSystem
 					}
 				}
 			}
+
+			if (!canMergeSubPass)
+			{
+				// If we can't merge with the existing subpass and have reached the limit, we need to start a new render pass
+				var subPassCount = subPassDescriptors.Count - subPassStartIndex;
+				if (subPassCount == 7)
+					canMergeWithExistingPass = false;
+			}
+
+			if (!canMergeWithExistingPass && isInNativePass)
+			{
+				EndSubPass();
+				EndRenderPass(builder.Index);
+			}
+
+			nativePassIndex = nativePassDescriptors.Count;
+			if (passNameBuilder.Length > 0)
+				_ = passNameBuilder.Append(", ");
+			_ = passNameBuilder.Append(builder.Name);
 
 			// If we can't merge or this is a new pass, add attachments
 			if (!canMergeSubPass || !isInNativePass)
