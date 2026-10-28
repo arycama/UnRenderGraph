@@ -281,7 +281,7 @@ public class RenderGraph : IDisposable
 		return handle;
 	}
 
-	public ViewHandle AddViewInfo(Int2 size, int samples = 1, int volumeDepth = 1)
+	public ViewHandle AddViewInfo(Int2 size, int volumeDepth = 1, int samples = 1)
 	{
 		var index = viewInfos.Count;
 		viewInfos.Add(new(size, samples, volumeDepth));
